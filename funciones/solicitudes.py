@@ -4,6 +4,7 @@ from mysql.connector import errorcode
 from conexion import conectar
 
 TIPOS_USUARIO = ("Estudiante", "Docente", "Administrativo")
+DOMINIO_CORREO = "@ut-tijuana.edu.mx"
 
 
 def listar_usuarios():
@@ -27,8 +28,8 @@ def listar_usuarios():
 
 def registrar_usuario(tipo_usuario, correo, contrasena, nombre, primer_apellido, segundo_apellido=None):
     correo_limpio = correo.strip().lower()
-    if "@" not in correo_limpio or correo_limpio.startswith("@") or "." not in correo_limpio.split("@", 1)[1]:
-        raise ValueError("El correo debe tener un formato valido con @ y dominio.")
+    if not correo_limpio.endswith(DOMINIO_CORREO) or len(correo_limpio) <= len(DOMINIO_CORREO) or " " in correo_limpio:
+        raise ValueError(f"El correo debe pertenecer al dominio {DOMINIO_CORREO}.")
 
     cnx = conectar()
     try:

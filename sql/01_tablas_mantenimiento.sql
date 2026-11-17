@@ -63,7 +63,8 @@ CREATE TABLE material (
 
 CREATE TABLE trabajador_mantenimiento (
     id_trabajador INT PRIMARY KEY AUTO_INCREMENT,
-    usuario_acceso VARCHAR(40) NOT NULL UNIQUE,
+    usuario_acceso VARCHAR(80) NOT NULL UNIQUE,
+    correo VARCHAR(80) NOT NULL UNIQUE,
     contrasena VARCHAR(60) NOT NULL DEFAULT '1234',
     nombre VARCHAR(40) NOT NULL,
     primer_apell VARCHAR(30) NOT NULL,

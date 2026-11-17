@@ -2,6 +2,8 @@ import mysql.connector
 from mysql.connector import errorcode
 from conexion import conectar
 
+DOMINIO_CORREO = "@ut-tijuana.edu.mx"
+
 
 def iniciar_sesion(identificador, contrasena):
     ident = identificador.strip().lower()
@@ -13,15 +15,15 @@ def iniciar_sesion(identificador, contrasena):
     try:
         cursor = cnx.cursor(dictionary=True)
 
-        # 1. Revisar si corresponde a personal de mantenimiento
+        # 1. Revisar si corresponde a personal de mantenimiento (por usuario o correo)
         cursor.execute(
             """
-            SELECT id_trabajador, usuario_acceso, especialidad, id_supervisor,
+            SELECT id_trabajador, usuario_acceso, correo, especialidad, id_supervisor,
                    CONCAT_WS(' ', nombre, primer_apell, seg_apell) AS nombre_completo
             FROM trabajador_mantenimiento
-            WHERE LOWER(usuario_acceso) = %s AND contrasena = %s
+            WHERE (LOWER(usuario_acceso) = %s OR LOWER(correo) = %s) AND contrasena = %s
             """,
-            (ident, clave),
+            (ident, ident, clave),
         )
         trabajador = cursor.fetchone()
         if trabajador:
@@ -60,24 +62,52 @@ def iniciar_sesion(identificador, contrasena):
         cnx.close()
 
 
-def registrar_tecnico(usuario_acceso, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor):
+def existe_usuario_tecnico(usuario_acceso):
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor()
+        cursor.execute(
+            "SELECT 1 FROM trabajador_mantenimiento WHERE LOWER(usuario_acceso) = %s LIMIT 1",
+            (usuario_acceso.strip().lower(),),
+        )
+        existe = cursor.fetchone() is not None
+        cursor.close()
+        return existe
+    finally:
+        cnx.close()
+
+
+def registrar_tecnico(usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor):
+    correo_limpio = correo.strip().lower()
+    if not correo_limpio.endswith(DOMINIO_CORREO) or len(correo_limpio) <= len(DOMINIO_CORREO) or " " in correo_limpio:
+        raise ValueError(f"El correo debe pertenecer al dominio {DOMINIO_CORREO}.")
+
     usuario_limpio = usuario_acceso.strip().lower()
     if not usuario_limpio or " " in usuario_limpio:
-        raise ValueError("El usuario de acceso no puede estar vacio ni contener espacios.")
+        usuario_limpio = correo_limpio
 
     cnx = conectar()
     try:
         cursor = cnx.cursor()
+        # Si ya existe un tecnico con ese usuario (homonimo), usar el correo como usuario unico
+        cursor.execute(
+            "SELECT 1 FROM trabajador_mantenimiento WHERE LOWER(usuario_acceso) = %s LIMIT 1",
+            (usuario_limpio,),
+        )
+        if cursor.fetchone():
+            usuario_limpio = correo_limpio
+
         seg = seg_apell.strip() if seg_apell and seg_apell.strip() else None
         cursor.execute(
             """
             INSERT INTO trabajador_mantenimiento (
-                usuario_acceso, contrasena, nombre, primer_apell, seg_apell,
+                usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell,
                 especialidad, exp_laboral, id_supervisor
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 usuario_limpio,
+                correo_limpio,
                 contrasena.strip(),
                 nombre.strip(),
                 primer_apell.strip(),
@@ -92,7 +122,7 @@ def registrar_tecnico(usuario_acceso, contrasena, nombre, primer_apell, seg_apel
         return usuario_limpio
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_DUP_ENTRY:
-            raise ValueError("Ese usuario de acceso ya existe en el sistema.")
+            raise ValueError("Ese correo ya se encuentra registrado en el sistema.")
         raise
     finally:
         cnx.close()

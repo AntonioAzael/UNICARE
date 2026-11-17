@@ -9,7 +9,7 @@ from rich.table import Table
 
 from conexion import conectar
 from logo import mostrar_banner_unicare
-from funciones.auth import iniciar_sesion, registrar_tecnico
+from funciones.auth import existe_usuario_tecnico, iniciar_sesion, registrar_tecnico
 from funciones.ordenes import (
     asignar_tecnicos_orden,
     consultar_actividades_orden,
@@ -97,15 +97,14 @@ def pedir_texto(etiqueta, permitir_cancelar=False):
 
 
 def pedir_correo(etiqueta="Correo institucional (0 para cancelar)"):
+    dominio = "@ut-tijuana.edu.mx"
     while True:
         valor = Prompt.ask(etiqueta).strip().lower()
         if valor == "0":
             return None
-        if "@" in valor and " " not in valor and not valor.startswith("@"):
-            dominio = valor.split("@", 1)[1]
-            if "." in dominio and not dominio.startswith(".") and not dominio.endswith("."):
-                return valor
-        console.print("[red]Correo invalido. Debe incluir @ y un dominio valido (ej. usuario@utt.edu.mx).[/]")
+        if valor.endswith(dominio) and len(valor) > len(dominio) and " " not in valor:
+            return valor
+        console.print(f"[red]Correo invalido. Debe ser institucional {dominio} (ej. 0323105973{dominio}).[/]")
 
 
 def flujo_registro_estudiante(sesion=None):
@@ -155,14 +154,25 @@ def flujo_registrar_personal(sesion):
         registrar_usuario(tipo, correo, contrasena, nombre, ap1, ap2 or None)
         console.print(f"\n[bold green]{tipo} registrado correctamente ({correo}).[/]")
     else:
-        usuario_acc = pedir_texto("Usuario de acceso (ej. ana.ruiz)")
+        correo = pedir_correo("Correo institucional del tecnico (0 para cancelar)")
+        if not correo:
+            return
+        sugerido = f"{nombre.split()[0].lower()}.{ap1.split()[0].lower()}"
+        if existe_usuario_tecnico(sugerido):
+            console.print(
+                f"[yellow]Ya existe un tecnico con el usuario '{sugerido}'. "
+                f"Puedes escribir otro usuario distinto o presionar Enter para iniciar sesion con tu correo ({correo}).[/]"
+            )
+            usuario_acc = Prompt.ask("Usuario de acceso", default=correo, show_default=False).strip().lower()
+        else:
+            usuario_acc = Prompt.ask("Usuario de acceso", default=sugerido).strip().lower()
         especialidad = pedir_texto("Especialidad")
         exp = IntPrompt.ask("Anios de experiencia laboral", default=1)
         contrasena = Prompt.ask("Contrasena asignada", password=True).strip()
         while not contrasena:
             contrasena = Prompt.ask("La contrasena no puede ir vacia", password=True).strip()
         usuario_creado = registrar_tecnico(
-            usuario_acc, contrasena, nombre, ap1, ap2 or None, especialidad, exp, sesion["id"]
+            usuario_acc, correo, contrasena, nombre, ap1, ap2 or None, especialidad, exp, sesion["id"]
         )
         console.print(f"\n[bold green]Tecnico registrado correctamente ({usuario_creado}).[/]")
 
@@ -676,7 +686,7 @@ def flujo_login():
     console.print(
         Panel(
             "Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).\n"
-            "[dim]Ejemplo solicitante: mauro.sanchez@utt.edu.mx / 1234\n"
+            "[dim]Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234\n"
             "Ejemplo mantenimiento: carlos.ramirez / 1234[/]",
             title="INICIAR SESION",
             border_style="#2B7FD9",

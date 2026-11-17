@@ -50,16 +50,16 @@ INSERT INTO material (no_material, nombre_material, stock_minimo, existencia, de
 ('MAT-006', 'Empaque hidraulico 1/2', 6, 18, 'Empaque de hule para llaves y sanitarios');
 
 INSERT INTO usuario (num_usuario, tipo_usuario, correo, contrasena, nombre, primer_apellido, segundo_apellido) VALUES
-(1, 'Estudiante', 'mauro.sanchez@utt.edu.mx', '1234', 'Mauro Alberto', 'Sanchez', 'Trinidad'),
-(2, 'Estudiante', 'angel.zarate@utt.edu.mx', '1234', 'Angel Leobardo', 'Zarate', 'Guerrero'),
-(3, 'Docente', 'claudia.morales@utt.edu.mx', '1234', 'Claudia', 'Morales', 'Vazquez'),
-(4, 'Administrativo', 'roberto.mendoza@utt.edu.mx', '1234', 'Roberto', 'Mendoza', 'Cruz');
+(1, 'Estudiante', 'mauro.sanchez@ut-tijuana.edu.mx', '1234', 'Mauro Alberto', 'Sanchez', 'Trinidad'),
+(2, 'Estudiante', 'angel.zarate@ut-tijuana.edu.mx', '1234', 'Angel Leobardo', 'Zarate', 'Guerrero'),
+(3, 'Docente', 'claudia.morales@ut-tijuana.edu.mx', '1234', 'Claudia', 'Morales', 'Vazquez'),
+(4, 'Administrativo', 'roberto.mendoza@ut-tijuana.edu.mx', '1234', 'Roberto', 'Mendoza', 'Cruz');
 
-INSERT INTO trabajador_mantenimiento (id_trabajador, usuario_acceso, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor) VALUES
-(1, 'carlos.ramirez', '1234', 'Carlos', 'Ramirez', 'Lopez', 'Electricidad y Climas', 8, NULL),
-(2, 'luis.gomez', '1234', 'Luis Fernando', 'Gomez', 'Diaz', 'Redes e Internet', 4, NULL),
-(3, 'javier.hernandez', '1234', 'Javier', 'Hernandez', 'Soto', 'Mobiliario e Infraestructura', 5, NULL),
-(4, 'miguel.torres', '1234', 'Miguel Angel', 'Torres', 'Pena', 'Mantenimiento General', 2, NULL);
+INSERT INTO trabajador_mantenimiento (id_trabajador, usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor) VALUES
+(1, 'carlos.ramirez', 'carlos.ramirez@ut-tijuana.edu.mx', '1234', 'Carlos', 'Ramirez', 'Lopez', 'Electricidad y Climas', 8, NULL),
+(2, 'luis.gomez', 'luis.gomez@ut-tijuana.edu.mx', '1234', 'Luis Fernando', 'Gomez', 'Diaz', 'Redes e Internet', 4, NULL),
+(3, 'javier.hernandez', 'javier.hernandez@ut-tijuana.edu.mx', '1234', 'Javier', 'Hernandez', 'Soto', 'Mobiliario e Infraestructura', 5, NULL),
+(4, 'miguel.torres', 'miguel.torres@ut-tijuana.edu.mx', '1234', 'Miguel Angel', 'Torres', 'Pena', 'Mantenimiento General', 2, NULL);
 
 INSERT INTO equipo_instalacion (codigo_inventario, nombre_equipo, tipo_equipo_instalacion, necesita_reparacion, area, piso, salon, no_edificio) VALUES
 ('EQ-D1-PROY01', 'Proyector Epson Aula 104', 'Equipo Audiovisual', 1, 'Aulas Planta Baja', 'Planta Baja', '104', 'ED-DOC1'),
