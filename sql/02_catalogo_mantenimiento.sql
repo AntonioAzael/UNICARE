@@ -7,17 +7,13 @@ USE sistema_reportes_mantenimiento;
 
 START TRANSACTION;
 
-INSERT INTO estado_reporte (nombre_estado, descripcion_estado) VALUES
-('Pendiente', 'Solicitud registrada en espera de revision y orden de trabajo'),
-('En revision', 'Solicitud revisada por el area de mantenimiento'),
-('En proceso', 'Solicitud en atencion mediante orden de trabajo activa'),
-('Solucionado', 'Falla atendida y cerrada satisfactoriamente');
-
-INSERT INTO estado_orden (nombre_estado, descripcion_estado) VALUES
-('Creada', 'Orden de trabajo generada y pendiente de inicio'),
-('En proceso', 'Orden de trabajo en ejecucion por el personal tecnico'),
-('Finalizada', 'Orden de trabajo concluida con actividades verificadas'),
-('Cancelada', 'Orden de trabajo cancelada');
+-- Catalogo unico de estados (lo usan REPORTE y MANTENIMIENTO)
+INSERT INTO estado (nombre_estado, descripcion_estado) VALUES
+('Pendiente', 'Registrado y en espera de revision o de inicio de trabajos'),
+('En revision', 'Revisado por el area de mantenimiento'),
+('En proceso', 'En atencion por el personal tecnico'),
+('Solucionado', 'Atendido y cerrado satisfactoriamente'),
+('Cancelado', 'Cancelado sin llegar a resolverse');
 
 INSERT INTO categoria (nombre_categoria, descripcion_categoria) VALUES
 ('Electricidad', 'Fallas en luminarias, contactos o suministro electrico'),
@@ -55,11 +51,12 @@ INSERT INTO usuario (num_usuario, tipo_usuario, correo, contrasena, nombre, prim
 (3, 'Docente', 'claudia.morales@ut-tijuana.edu.mx', '1234', 'Claudia', 'Morales', 'Vazquez'),
 (4, 'Administrativo', 'roberto.mendoza@ut-tijuana.edu.mx', '1234', 'Roberto', 'Mendoza', 'Cruz');
 
-INSERT INTO trabajador_mantenimiento (id_trabajador, usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor) VALUES
+-- id_supervisor: Carlos supervisa a Luis y Javier, Javier supervisa a Miguel
+INSERT INTO trabajador_mantenimiento (id_trabajador, usuario_acceso, correo, contrasena, nombre, primer_apellido, segundo_apellido, especialidad, exp_laboral, id_supervisor) VALUES
 (1, 'carlos.ramirez', 'carlos.ramirez@ut-tijuana.edu.mx', '1234', 'Carlos', 'Ramirez', 'Lopez', 'Electricidad y Climas', 8, NULL),
-(2, 'luis.gomez', 'luis.gomez@ut-tijuana.edu.mx', '1234', 'Luis Fernando', 'Gomez', 'Diaz', 'Redes e Internet', 4, NULL),
-(3, 'javier.hernandez', 'javier.hernandez@ut-tijuana.edu.mx', '1234', 'Javier', 'Hernandez', 'Soto', 'Mobiliario e Infraestructura', 5, NULL),
-(4, 'miguel.torres', 'miguel.torres@ut-tijuana.edu.mx', '1234', 'Miguel Angel', 'Torres', 'Pena', 'Mantenimiento General', 2, NULL);
+(2, 'luis.gomez', 'luis.gomez@ut-tijuana.edu.mx', '1234', 'Luis Fernando', 'Gomez', 'Diaz', 'Redes e Internet', 4, 1),
+(3, 'javier.hernandez', 'javier.hernandez@ut-tijuana.edu.mx', '1234', 'Javier', 'Hernandez', 'Soto', 'Mobiliario e Infraestructura', 5, 1),
+(4, 'miguel.torres', 'miguel.torres@ut-tijuana.edu.mx', '1234', 'Miguel Angel', 'Torres', 'Pena', 'Mantenimiento General', 2, 3);
 
 INSERT INTO equipo_instalacion (codigo_inventario, nombre_equipo, tipo_equipo_instalacion, necesita_reparacion, area, piso, salon, no_edificio) VALUES
 ('EQ-D1-PROY01', 'Proyector Epson Aula 104', 'Equipo Audiovisual', 1, 'Aulas Planta Baja', 'Planta Baja', '104', 'ED-DOC1'),
@@ -69,66 +66,51 @@ INSERT INTO equipo_instalacion (codigo_inventario, nombre_equipo, tipo_equipo_in
 ('EQ-D1-BUT12', 'Lote Butacas Fila B Aula 102', 'Mobiliario Escolar', 0, 'Aulas Planta Baja', 'Planta Baja', '102', 'ED-DOC1'),
 ('EQ-BIB-AA01', 'Minisplit Sala Lectura', 'Climatizacion', 0, 'Sala General', 'Planta Baja', 'SALA-A', 'ED-BIBL');
 
-INSERT INTO requiere (codigo_inventario, no_material) VALUES
-('EQ-LABT-PC01', 'MAT-002'),
-('EQ-LABT-PC01', 'MAT-003'),
-('EQ-LABT-SW01', 'MAT-002'),
-('EQ-D2-LUM03', 'MAT-001'),
-('EQ-D2-LUM03', 'MAT-004'),
-('EQ-D1-BUT12', 'MAT-005');
-
 -- Minimo 3 solicitudes registradas en la misma fecha (CURDATE) para la Consulta 1
-INSERT INTO reporte (folio, descripcion_reporte, observaciones, fecha_registro, num_usuario, id_trabajador, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario) VALUES
-('REP-2026-0001', 'El proyector enciende pero no da senal HDMI en el escritorio', 'Se requiere revisar cableado y puerto HDMI del techo', CURDATE(), 3, 2, 'En proceso', 'Electricidad', 'Media', 'EQ-D1-PROY01'),
-('REP-2026-0002', 'Dos lamparas parpadean en el techo del salon 205', 'Balastra con zumbido constante', CURDATE(), 1, NULL, 'Pendiente', 'Electricidad', 'Alta', 'EQ-D2-LUM03'),
-('REP-2026-0003', 'Puerto de red sin enlace en estacion 01 de redes', 'Sin luz indicadora en tarjeta de red', CURDATE(), 2, 1, 'En revision', 'Internet', 'Alta', 'EQ-LABT-PC01'),
-('REP-2026-0004', 'Tres butacas tenian tornillos flojos en la fila B', 'Atendido en horario vespertino', DATE_SUB(CURDATE(), INTERVAL 4 DAY), 2, 3, 'Solucionado', 'Mobiliario', 'Baja', 'EQ-D1-BUT12');
+INSERT INTO reporte (folio, descripcion_reporte, observaciones, fecha_registro, num_usuario, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario) VALUES
+('REP-2026-0001', 'El proyector enciende pero no da senal HDMI en el escritorio', 'Se requiere revisar cableado y puerto HDMI del techo', CURDATE(), 3, 'En proceso', 'Electricidad', 'Media', 'EQ-D1-PROY01'),
+('REP-2026-0002', 'Dos lamparas parpadean en el techo del salon 205', 'Balastra con zumbido constante', CURDATE(), 1, 'Pendiente', 'Electricidad', 'Alta', 'EQ-D2-LUM03'),
+('REP-2026-0003', 'Puerto de red sin enlace en estacion 01 de redes', 'Sin luz indicadora en tarjeta de red', CURDATE(), 2, 'En revision', 'Internet', 'Alta', 'EQ-LABT-PC01'),
+('REP-2026-0004', 'Tres butacas tenian tornillos flojos en la fila B', 'Atendido en horario vespertino', DATE_SUB(CURDATE(), INTERVAL 4 DAY), 2, 'Solucionado', 'Mobiliario', 'Baja', 'EQ-D1-BUT12'),
+('REP-2026-0005', 'El minisplit de la sala de lectura enfria poco y tiene filtros sucios', 'Se solicito limpieza y revision de gas', DATE_SUB(CURDATE(), INTERVAL 13 DAY), 4, 'Solucionado', 'Limpieza', 'Media', 'EQ-BIB-AA01');
 
-INSERT INTO utiliza (folio, no_material, cantidad_usada) VALUES
-('REP-2026-0004', 'MAT-005', 3);
+-- REPORTE 1:1 SOLUCION
+INSERT INTO solucion (no_solucion, fecha_resolucion, tiempo_resolucion, solucion_aplicada, observaciones_solucion, folio) VALUES
+(1, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 1.50, 'Se ajustaron y reemplazaron tornillos de sujecion en tres butacas', 'Mobiliario verificado y firme', 'REP-2026-0004'),
+(2, DATE_SUB(CURDATE(), INTERVAL 11 DAY), 4.00, 'Limpieza de serpentin y filtros, revision de gas y drenaje', 'Equipo operando correctamente', 'REP-2026-0005');
 
-INSERT INTO solucion (no_solucion, fecha_resolucion, solucion_aplicada, observaciones_solucion, folio, num_usuario) VALUES
-(1, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Se ajustaron y reemplazaron tornillos de sujecion en tres butacas', 'Mobiliario verificado y firme', 'REP-2026-0004', 4);
+-- SOLUCION M:M MATERIAL
+INSERT INTO solucion_material (no_solucion, no_material, cantidad_usada) VALUES
+(1, 'MAT-005', 3);
 
--- Ordenes de trabajo de muestra (Consulta 3)
-INSERT INTO orden_trabajo (num_orden, folio, id_tipo_mantenimiento, nombre_estado, fecha_creacion, fecha_programada, fecha_inicio, fecha_fin, observaciones, costo_mano_obra, costo_materiales) VALUES
-('OT-2026-0001', 'REP-2026-0001', 'CORR', 'En proceso', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 DAY), CURDATE(), NULL, 'Revision integral de proyector y ducto HDMI en Docencia 1', 450.00, 180.00),
-('OT-2026-0002', 'REP-2026-0004', 'CORR', 'Finalizada', DATE_SUB(CURDATE(), INTERVAL 4 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Reparacion completa de mobiliario en aula 102', 250.00, 95.00);
+-- Mantenimientos u ordenes de trabajo de muestra (Consulta 3)
+INSERT INTO mantenimiento (clave_mantenimiento, fecha_creacion, fecha_programada, fecha_inicio, fecha_fin, descripcion_trabajo, observaciones, costo_mano_obra, costo_materiales, id_tipo_mantenimiento, folio, nombre_estado) VALUES
+('MNT-2026-0001', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 DAY), CURDATE(), NULL, 'Revision integral de proyector y ducto HDMI en Docencia 1', 'Trabajo coordinado entre electricidad y redes', 450.00, 180.00, 'CORR', 'REP-2026-0001', 'En proceso'),
+('MNT-2026-0002', DATE_SUB(CURDATE(), INTERVAL 4 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Reparacion completa de mobiliario en aula 102', 'Sin pendientes', 250.00, 95.00, 'CORR', 'REP-2026-0004', 'Solucionado'),
+('MNT-2026-0003', DATE_SUB(CURDATE(), INTERVAL 12 DAY), DATE_SUB(CURDATE(), INTERVAL 11 DAY), DATE_SUB(CURDATE(), INTERVAL 11 DAY), DATE_SUB(CURDATE(), INTERVAL 11 DAY), 'Limpieza de filtros y revision de gas en minisplit', 'Mantenimiento preventivo programado', 300.00, 0.00, 'PREV', 'REP-2026-0005', 'Solucionado');
 
--- Minimo 3 tecnicos asignados a una orden de trabajo (Consulta 4)
-INSERT INTO asignacion_orden (num_orden, id_trabajador, fecha_asignacion, horas_asignadas, actividad_realizar) VALUES
-('OT-2026-0001', 1, CURDATE(), 2.50, 'Revision de alimentacion electrica del proyector y toma de corriente'),
-('OT-2026-0001', 2, CURDATE(), 3.00, 'Diagnostico de senal de video, puerto HDMI y cableado estructurado'),
-('OT-2026-0001', 4, CURDATE(), 1.50, 'Apoyo en desmontaje de soporte y limpieza interna de filtros');
+-- Minimo 3 tecnicos asignados a un mantenimiento (Consulta 4)
+INSERT INTO mantenimiento_trabajador (clave_mantenimiento, id_trabajador, fecha_asignacion, horas_asignadas, actividad_asignada) VALUES
+('MNT-2026-0001', 1, CURDATE(), 2.50, 'Revision de alimentacion electrica del proyector y toma de corriente'),
+('MNT-2026-0001', 2, CURDATE(), 3.00, 'Diagnostico de senal de video, puerto HDMI y cableado estructurado'),
+('MNT-2026-0001', 4, CURDATE(), 1.50, 'Apoyo en desmontaje de soporte y limpieza interna de filtros'),
+('MNT-2026-0002', 3, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 1.50, 'Ajuste y reemplazo de tornilleria en butacas'),
+('MNT-2026-0003', 1, DATE_SUB(CURDATE(), INTERVAL 11 DAY), 4.00, 'Limpieza de serpentin, filtros y revision de gas del minisplit');
 
--- Minimo 5 actividades especificas realizadas en una orden de trabajo (Consulta 2)
-INSERT INTO actividad_orden (num_orden, descripcion_actividad, fecha_actividad, resultado) VALUES
-('OT-2026-0001', 'Inspeccion visual del proyector y soporte metalico en techo', CURDATE(), 'Soporte firme sin danos fisicos'),
-('OT-2026-0001', 'Medicion de voltaje en contacto superior de alimentacion', CURDATE(), 'Lectura estable de 127V'),
-('OT-2026-0001', 'Prueba de continuidad en cable HDMI hacia el escritorio docente', CURDATE(), 'Cable principal con falso contacto detectado'),
-('OT-2026-0001', 'Limpieza de filtro de aire y optica externa del equipo', CURDATE(), 'Filtro limpio y flujo de aire normal'),
-('OT-2026-0001', 'Reemplazo de conector y prueba de proyeccion con laptop', CURDATE(), 'Imagen estable sin perdida de senal');
+-- Minimo 5 actividades especificas en un mantenimiento (Consulta 2)
+INSERT INTO historial_mantenimiento (fecha_historial, descripcion_historial, resultado, observaciones_historial, clave_mantenimiento) VALUES
+(CURDATE(), 'Inspeccion visual del proyector y soporte metalico en techo', 'Soporte firme sin danos fisicos', NULL, 'MNT-2026-0001'),
+(CURDATE(), 'Medicion de voltaje en contacto superior de alimentacion', 'Lectura estable de 127V', NULL, 'MNT-2026-0001'),
+(CURDATE(), 'Prueba de continuidad en cable HDMI hacia el escritorio docente', 'Cable principal con falso contacto detectado', NULL, 'MNT-2026-0001'),
+(CURDATE(), 'Limpieza de filtro de aire y optica externa del equipo', 'Filtro limpio y flujo de aire normal', NULL, 'MNT-2026-0001'),
+(CURDATE(), 'Reemplazo de conector y prueba de proyeccion con laptop', 'Imagen estable sin perdida de senal', NULL, 'MNT-2026-0001'),
+(DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Ajuste y reemplazo de tornillos en tres butacas de la fila B', 'Butacas firmes', NULL, 'MNT-2026-0002'),
+(DATE_SUB(CURDATE(), INTERVAL 11 DAY), 'Limpieza de serpentin, filtros y drenaje del equipo de clima', 'Completado sin fallas', 'Equipo operando correctamente', 'MNT-2026-0003');
 
--- Planes de mantenimiento preventivo por edificio y equipo (Consulta 5)
-INSERT INTO plan_mantenimiento (num_plan, nombre_plan, no_edificio, codigo_inventario, descripcion_plan, frecuencia, duracion_estimada_horas, estado_plan) VALUES
-('PLAN-2026-0001', 'Mantenimiento Preventivo Climas Biblioteca', 'ED-BIBL', 'EQ-BIB-AA01', 'Limpieza de serpentin, filtros y revision de drenaje en minisplits', 'Trimestral', 4.00, 'Activo'),
-('PLAN-2026-0002', 'Revision Electrica de Aulas Docencia 2', 'ED-DOC2', 'EQ-D2-LUM03', 'Inspeccion de luminarias, balastras y tableros por piso', 'Mensual', 3.50, 'Activo'),
-('PLAN-2026-0003', 'Limpieza de Rack y Nodos de Red', 'ED-LABT', 'EQ-LABT-SW01', 'Aspirado de rack principal, revision de patch cords y puertos', 'Semestral', 5.00, 'Inactivo');
-
-INSERT INTO mantenimiento (clave_mantenimiento, fecha_programada, fecha_realizacion, descripcion_trabajo, id_tipo_mantenimiento) VALUES
-('MNT-2026-0001', DATE_SUB(CURDATE(), INTERVAL 12 DAY), DATE_SUB(CURDATE(), INTERVAL 11 DAY), 'Limpieza de filtros y revision de gas en minisplit', 'PREV');
-
-INSERT INTO participa (clave_mantenimiento, id_trabajador) VALUES
-('MNT-2026-0001', 1);
-
-INSERT INTO recibe_mantenimiento (clave_mantenimiento, codigo_inventario) VALUES
-('MNT-2026-0001', 'EQ-BIB-AA01');
-
-INSERT INTO historial_mantenimiento (no_historial, descripcion_historial, fecha_historial, resultado, observaciones_historial, codigo_inventario, clave_mantenimiento) VALUES
-(1, 'Limpieza de serpentin, filtros y drenaje del equipo de clima', DATE_SUB(CURDATE(), INTERVAL 11 DAY), 'Completado sin fallas', 'Equipo operando correctamente', 'EQ-BIB-AA01', 'MNT-2026-0001');
-
-UPDATE trabajador_mantenimiento SET id_supervisor = 1 WHERE id_trabajador = 2;
-UPDATE trabajador_mantenimiento SET id_supervisor = 1 WHERE id_trabajador = 3;
-UPDATE trabajador_mantenimiento SET id_supervisor = 3 WHERE id_trabajador = 4;
+-- Planes de mantenimiento preventivo por equipo (el edificio se obtiene del equipo) (Consulta 5)
+INSERT INTO plan_mantenimiento (num_plan, nombre_plan, descripcion_plan, frecuencia, duracion_estimada_horas, estado_plan, codigo_inventario) VALUES
+('PLAN-2026-0001', 'Mantenimiento Preventivo Climas Biblioteca', 'Limpieza de serpentin, filtros y revision de drenaje en minisplits', 'Trimestral', 4.00, 'Activo', 'EQ-BIB-AA01'),
+('PLAN-2026-0002', 'Revision Electrica de Aulas Docencia 2', 'Inspeccion de luminarias, balastras y tableros por piso', 'Mensual', 3.50, 'Activo', 'EQ-D2-LUM03'),
+('PLAN-2026-0003', 'Limpieza de Rack y Nodos de Red', 'Aspirado de rack principal, revision de patch cords y puertos', 'Semestral', 5.00, 'Inactivo', 'EQ-LABT-SW01');
 
 COMMIT;

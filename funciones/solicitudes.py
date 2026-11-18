@@ -109,8 +109,8 @@ def registrar_solicitud(num_usuario, codigo_inventario, nombre_categoria, nombre
             """
             INSERT INTO reporte (
                 folio, descripcion_reporte, observaciones, fecha_registro,
-                num_usuario, id_trabajador, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
-            ) VALUES (%s, %s, %s, %s, %s, NULL, 'Pendiente', %s, %s, %s)
+                num_usuario, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
+            ) VALUES (%s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s)
             """,
             (folio, descripcion, obs, fecha, num_usuario, nombre_categoria, nombre_prioridad, codigo_inventario),
         )
@@ -160,14 +160,14 @@ def consultar_solicitudes_por_fecha(fecha_consulta, num_usuario=None):
                 CONCAT(ed.nombre_edificio, ', ', e.piso, ', Salon ', e.salon, ' (', e.area, ')') AS ubicacion_equipo,
                 c.descripcion_categoria,
                 r.descripcion_reporte,
-                er.descripcion_estado,
+                es.descripcion_estado,
                 r.observaciones
             FROM reporte r
             INNER JOIN usuario u ON u.num_usuario = r.num_usuario
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
             INNER JOIN categoria c ON c.nombre_categoria = r.nombre_categoria
-            INNER JOIN estado_reporte er ON er.nombre_estado = r.nombre_estado
+            INNER JOIN estado es ON es.nombre_estado = r.nombre_estado
             WHERE r.fecha_registro = %s
         """
         params = [fecha_consulta]

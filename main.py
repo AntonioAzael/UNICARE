@@ -1,11 +1,8 @@
 import os
 import sys
+import textwrap
 from datetime import date, datetime
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
-from rich.table import Table
+from getpass import getpass
 
 from conexion import conectar
 from logo import mostrar_banner_unicare
@@ -18,7 +15,7 @@ from funciones.ordenes import (
     listar_ordenes,
     listar_solicitudes_disponibles,
     listar_tecnicos,
-    listar_tipos_y_estados_orden,
+    listar_tipos_mantenimiento,
     registrar_actividades_orden,
     registrar_orden_trabajo,
 )
@@ -28,8 +25,13 @@ from funciones.planes import (
     listar_equipos_por_edificio,
     registrar_plan_preventivo,
 )
+from funciones.soluciones import (
+    consultar_soluciones,
+    listar_materiales,
+    listar_reportes_sin_solucion,
+    registrar_solucion,
+)
 from funciones.solicitudes import (
-    TIPOS_USUARIO,
     consultar_solicitudes_por_fecha,
     listar_catalogos_solicitud,
     listar_fechas_solicitudes,
@@ -37,99 +39,203 @@ from funciones.solicitudes import (
     registrar_usuario,
 )
 
-console = Console()
+ANCHO = 70
+DOMINIO_CORREO = "@ut-tijuana.edu.mx"
+
+
+# ---------------------------------------------------------------------------
+# Utilidades de pantalla y captura de datos
+# ---------------------------------------------------------------------------
+
+def linea(caracter="="):
+    print(caracter * ANCHO)
+
+
+def titulo(texto):
+    linea()
+    print(" " + texto.upper())
+    linea()
 
 
 def limpiar_pantalla(sesion=None):
     if sys.stdout.isatty():
         os.system("cls" if os.name == "nt" else "clear")
-    else:
-        console.clear()
-    mostrar_banner_unicare(console)
+    mostrar_banner_unicare()
     if sesion:
         rol_txt = "Mantenimiento" if sesion["rol"] == "mantenimiento" else "Solicitante"
-        console.print(
-            f"[bold cyan]Sesion:[/] {sesion['nombre']} [dim]({rol_txt} - {sesion['detalle']})[/]"
-        )
+        print(f"Sesion: {sesion['nombre']} ({rol_txt} - {sesion['detalle']})")
+        linea("-")
 
 
 def pausar():
-    console.input("\n[dim]Presiona Enter para continuar...[/]")
+    input("\nPresiona Enter para continuar...")
 
 
-def pedir_fecha(etiqueta, default=None):
-    sugerida = (default or date.today()).isoformat()
+def entrada(etiqueta, defecto=None):
+    # input() con valor por defecto entre corchetes
+    if defecto is not None and defecto != "":
+        valor = input(f"{etiqueta} [{defecto}]: ").strip()
+        return valor if valor else str(defecto)
+    return input(f"{etiqueta}: ").strip()
+
+
+def pedir_texto(etiqueta, permitir_cancelar=False):
     while True:
-        valor = Prompt.ask(f"{etiqueta} (AAAA-MM-DD, 0 para cancelar)", default=sugerida).strip()
+        valor = input(f"{etiqueta}: ").strip()
+        if permitir_cancelar and valor == "0":
+            return None
+        if valor:
+            return valor
+        print("Este campo no puede quedar vacio.")
+
+
+def pedir_contrasena(etiqueta):
+    while True:
+        valor = getpass(f"{etiqueta}: ").strip()
+        if valor:
+            return valor
+        print("La contrasena no puede ir vacia.")
+
+
+def pedir_entero(etiqueta, defecto=None):
+    while True:
+        valor = entrada(etiqueta, defecto)
+        try:
+            return int(valor)
+        except ValueError:
+            print("Escribe un numero entero.")
+
+
+def pedir_decimal(etiqueta, defecto=None):
+    while True:
+        valor = entrada(etiqueta, defecto)
+        try:
+            numero = float(valor)
+            if numero < 0:
+                print("El valor no puede ser negativo.")
+                continue
+            return numero
+        except ValueError:
+            print("Escribe un numero valido (ej. 2.5).")
+
+
+def confirmar(pregunta, defecto=False):
+    sugerido = "s" if defecto else "n"
+    while True:
+        r = entrada(f"{pregunta} (s/n)", sugerido).lower()
+        if r in ("s", "si"):
+            return True
+        if r in ("n", "no"):
+            return False
+        print("Responde s o n.")
+
+
+def pedir_opcion(validas, defecto="0"):
+    while True:
+        op = entrada("Selecciona una opcion", defecto)
+        if op in validas:
+            return op
+        print("Opcion no valida.")
+
+
+def pedir_fecha(etiqueta, defecto=None):
+    sugerida = str(defecto or date.today())[:10]
+    while True:
+        valor = entrada(f"{etiqueta} (AAAA-MM-DD, 0 para cancelar)", sugerida)
         if valor == "0":
             return None
         try:
             return datetime.strptime(valor, "%Y-%m-%d").date()
         except ValueError:
-            console.print("[red]Formato invalido. Usa AAAA-MM-DD.[/]")
+            print("Formato invalido. Usa AAAA-MM-DD.")
 
 
-def elegir_de_lista(titulo, opciones, formato):
+def pedir_correo(etiqueta="Correo institucional (0 para cancelar)"):
+    while True:
+        valor = input(f"{etiqueta}: ").strip().lower()
+        if valor == "0":
+            return None
+        if valor.endswith(DOMINIO_CORREO) and len(valor) > len(DOMINIO_CORREO) and " " not in valor:
+            return valor
+        print(f"Correo invalido. Debe ser institucional {DOMINIO_CORREO} (ej. 0323105973{DOMINIO_CORREO}).")
+
+
+def elegir_de_lista(titulo_lista, opciones, formato):
     if not opciones:
-        console.print(f"[yellow]No hay registros disponibles para {titulo}.[/]")
+        print(f"No hay registros disponibles para {titulo_lista}.")
         return None
 
-    console.print(f"\n[bold cyan]{titulo}[/]")
+    print(f"\n{titulo_lista}")
+    linea("-")
     for i, item in enumerate(opciones, start=1):
-        console.print(f"  [bold][{i}][/] {formato(item)}")
-    console.print("  [bold][0][/] Cancelar")
+        print(f"  {i}. {formato(item)}")
+    print("  0. Cancelar")
 
     validas = [str(i) for i in range(0, len(opciones) + 1)]
-    eleccion = Prompt.ask("Selecciona una opcion", choices=validas, default="0")
+    eleccion = pedir_opcion(validas, "0")
     if eleccion == "0":
         return None
     return opciones[int(eleccion) - 1]
 
 
-def pedir_texto(etiqueta, permitir_cancelar=False):
-    while True:
-        valor = Prompt.ask(etiqueta).strip()
-        if permitir_cancelar and valor == "0":
-            return None
-        if valor:
-            return valor
-        console.print("[red]Este campo no puede quedar vacio.[/]")
+def mostrar_menu(titulo_menu, opciones):
+    # opciones: lista de (clave, texto)
+    titulo(titulo_menu)
+    for clave, texto in opciones:
+        print(f" {clave}. {texto}")
+    linea("-")
 
 
-def pedir_correo(etiqueta="Correo institucional (0 para cancelar)"):
-    dominio = "@ut-tijuana.edu.mx"
-    while True:
-        valor = Prompt.ask(etiqueta).strip().lower()
-        if valor == "0":
-            return None
-        if valor.endswith(dominio) and len(valor) > len(dominio) and " " not in valor:
-            return valor
-        console.print(f"[red]Correo invalido. Debe ser institucional {dominio} (ej. 0323105973{dominio}).[/]")
+def imprimir_tabla(encabezados, filas, anchos):
+    # Tabla de texto con celdas que se acomodan en varias lineas si son largas
+    separador = "+" + "+".join("-" * (a + 2) for a in anchos) + "+"
 
+    def imprimir_fila(celdas):
+        partes = [textwrap.wrap(str(c), a) or [""] for c, a in zip(celdas, anchos)]
+        alto = max(len(p) for p in partes)
+        for i in range(alto):
+            texto = " | ".join((p[i] if i < len(p) else "").ljust(a) for p, a in zip(partes, anchos))
+            print("| " + texto + " |")
+
+    print(separador)
+    imprimir_fila(encabezados)
+    print(separador)
+    for fila in filas:
+        imprimir_fila(fila)
+        print(separador)
+
+
+def imprimir_ficha(encabezado, campos):
+    print(f"\n--- {encabezado} ---")
+    for etiqueta, valor in campos:
+        print(f"{etiqueta}: {valor}")
+
+
+# ---------------------------------------------------------------------------
+# Registro de cuentas
+# ---------------------------------------------------------------------------
 
 def flujo_registro_estudiante(sesion=None):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]REGISTRO DE ESTUDIANTE[/]")
+    titulo("Registro de estudiante")
     nombre = pedir_texto("Nombre(s) (0 para cancelar)", permitir_cancelar=True)
     if not nombre:
         return None
     ap1 = pedir_texto("Primer apellido")
-    ap2 = Prompt.ask("Segundo apellido (opcional)", default="", show_default=False).strip()
+    ap2 = entrada("Segundo apellido (opcional)")
     correo = pedir_correo()
     if not correo:
         return None
-    contrasena = Prompt.ask("Crea una contrasena", password=True).strip()
-    while not contrasena:
-        contrasena = Prompt.ask("La contrasena no puede ir vacia", password=True).strip()
+    contrasena = pedir_contrasena("Crea una contrasena")
 
     registrar_usuario("Estudiante", correo, contrasena, nombre, ap1, ap2 or None)
-    console.print(f"\n[bold green]Cuenta creada correctamente. Ya puedes iniciar sesion con {correo}.[/]")
+    print(f"\nCuenta creada correctamente. Ya puedes iniciar sesion con {correo}.")
     return correo
 
 
 def flujo_registrar_personal(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold yellow]REGISTRO DE DOCENTE, ADMINISTRATIVO O TECNICO[/]")
+    titulo("Registro de docente, administrativo o tecnico")
     tipo = elegir_de_lista(
         "Tipo de cuenta a crear",
         ["Docente", "Administrativo", "Tecnico de mantenimiento"],
@@ -142,44 +248,44 @@ def flujo_registrar_personal(sesion):
     if not nombre:
         return
     ap1 = pedir_texto("Primer apellido")
-    ap2 = Prompt.ask("Segundo apellido (opcional)", default="", show_default=False).strip()
+    ap2 = entrada("Segundo apellido (opcional)")
 
     if tipo in ("Docente", "Administrativo"):
         correo = pedir_correo()
         if not correo:
             return
-        contrasena = Prompt.ask("Contrasena asignada", password=True).strip()
-        while not contrasena:
-            contrasena = Prompt.ask("La contrasena no puede ir vacia", password=True).strip()
+        contrasena = pedir_contrasena("Contrasena asignada")
         registrar_usuario(tipo, correo, contrasena, nombre, ap1, ap2 or None)
-        console.print(f"\n[bold green]{tipo} registrado correctamente ({correo}).[/]")
+        print(f"\n{tipo} registrado correctamente ({correo}).")
     else:
         correo = pedir_correo("Correo institucional del tecnico (0 para cancelar)")
         if not correo:
             return
         sugerido = f"{nombre.split()[0].lower()}.{ap1.split()[0].lower()}"
         if existe_usuario_tecnico(sugerido):
-            console.print(
-                f"[yellow]Ya existe un tecnico con el usuario '{sugerido}'. "
-                f"Puedes escribir otro usuario distinto o presionar Enter para iniciar sesion con tu correo ({correo}).[/]"
+            print(
+                f"Ya existe un tecnico con el usuario '{sugerido}'. "
+                f"Escribe otro usuario o presiona Enter para usar tu correo ({correo})."
             )
-            usuario_acc = Prompt.ask("Usuario de acceso", default=correo, show_default=False).strip().lower()
+            usuario_acc = entrada("Usuario de acceso", correo).lower()
         else:
-            usuario_acc = Prompt.ask("Usuario de acceso", default=sugerido).strip().lower()
+            usuario_acc = entrada("Usuario de acceso", sugerido).lower()
         especialidad = pedir_texto("Especialidad")
-        exp = IntPrompt.ask("Anios de experiencia laboral", default=1)
-        contrasena = Prompt.ask("Contrasena asignada", password=True).strip()
-        while not contrasena:
-            contrasena = Prompt.ask("La contrasena no puede ir vacia", password=True).strip()
+        exp = pedir_entero("Anios de experiencia laboral", 1)
+        contrasena = pedir_contrasena("Contrasena asignada")
         usuario_creado = registrar_tecnico(
             usuario_acc, correo, contrasena, nombre, ap1, ap2 or None, especialidad, exp, sesion["id"]
         )
-        console.print(f"\n[bold green]Tecnico registrado correctamente ({usuario_creado}).[/]")
+        print(f"\nTecnico registrado correctamente ({usuario_creado}).")
 
+
+# ---------------------------------------------------------------------------
+# Registro 1 y Consulta 1: solicitudes
+# ---------------------------------------------------------------------------
 
 def flujo_registrar_solicitud(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]REGISTRAR SOLICITUD DE MANTENIMIENTO[/]")
+    titulo("Registrar solicitud de mantenimiento")
     cats = listar_catalogos_solicitud()
     equipo = elegir_de_lista(
         "Equipo afectado",
@@ -205,10 +311,10 @@ def flujo_registrar_solicitud(sesion):
     if not prioridad:
         return
 
-    descripcion = Prompt.ask("Descripcion del problema (0 para cancelar)").strip()
+    descripcion = input("\nDescripcion del problema (0 para cancelar): ").strip()
     if descripcion == "0" or not descripcion:
         return
-    observaciones = Prompt.ask("Observaciones (opcional)", default="", show_default=False).strip()
+    observaciones = entrada("Observaciones (opcional)")
 
     folio = registrar_solicitud(
         sesion["id"],
@@ -218,189 +324,199 @@ def flujo_registrar_solicitud(sesion):
         descripcion,
         observaciones or None,
     )
-    console.print(f"\n[bold green]Solicitud registrada con numero {folio}.[/]")
+    print(f"\nSolicitud registrada con numero {folio}.")
 
 
 def mostrar_consulta_solicitudes(sesion, solo_mias=False):
     limpiar_pantalla(sesion)
-    titulo = "MIS SOLICITUDES POR FECHA" if solo_mias else "CONSULTA DE SOLICITUDES POR FECHA"
-    console.print(f"[bold cyan]{titulo}[/]")
+    titulo("Mis solicitudes por fecha" if solo_mias else "Consulta de solicitudes por fecha")
     uid = sesion["id"] if solo_mias else None
     fechas = listar_fechas_solicitudes(uid)
     if solo_mias and not fechas:
-        console.print("\n[yellow]Aun no tienes solicitudes registradas.[/]")
+        print("\nAun no tienes solicitudes registradas.")
         return
     if fechas:
-        console.print("\n[dim]Fechas con solicitudes registradas:[/]")
+        print("\nFechas con solicitudes registradas:")
         for f in fechas[:5]:
-            console.print(f"  {f['fecha_registro']} ({f['total']} registros)")
+            print(f"  {f['fecha_registro']} ({f['total']} registros)")
+        print()
 
-    fecha = pedir_fecha("Fecha a consultar", default=fechas[0]["fecha_registro"] if fechas else None)
+    fecha = pedir_fecha("Fecha a consultar", fechas[0]["fecha_registro"] if fechas else None)
     if not fecha:
         return
 
     filas = consultar_solicitudes_por_fecha(fecha, uid)
     if not filas:
-        console.print(f"[yellow]No se encontraron solicitudes registradas en {fecha}.[/]")
+        print(f"No se encontraron solicitudes registradas en {fecha}.")
         return
 
-    console.print(f"\n[bold cyan]Solicitudes de Mantenimiento ({fecha}) - {len(filas)} registros[/]")
+    print(f"\nSolicitudes de Mantenimiento ({fecha}) - {len(filas)} registros")
     for r in filas:
-        detalle = (
-            f"[bold]Fecha de solicitud:[/] {r['fecha_registro']}   |   "
-            f"[bold]No. solicitud:[/] {r['folio']}\n"
-            f"[bold]Usuario:[/] {r['nombre_usuario']}\n"
-            f"[bold]Equipo afectado:[/] {r['nombre_equipo']}\n"
-            f"[bold]Ubicacion:[/] {r['ubicacion_equipo']}\n"
-            f"[bold]Tipo de problema:[/] {r['descripcion_categoria']}\n"
-            f"[bold]Problema:[/] {r['descripcion_reporte']}\n"
-            f"[bold]Estado:[/] {r['descripcion_estado']}\n"
-            f"[bold]Observaciones:[/] {r['observaciones'] or 'Sin observaciones'}"
+        imprimir_ficha(
+            f"Solicitud {r['folio']}",
+            [
+                ("Fecha de solicitud", r["fecha_registro"]),
+                ("No. solicitud", r["folio"]),
+                ("Usuario", r["nombre_usuario"]),
+                ("Equipo afectado", r["nombre_equipo"]),
+                ("Ubicacion", r["ubicacion_equipo"]),
+                ("Tipo de problema", r["descripcion_categoria"]),
+                ("Problema", r["descripcion_reporte"]),
+                ("Estado", r["descripcion_estado"]),
+                ("Observaciones", r["observaciones"] or "Sin observaciones"),
+            ],
         )
-        console.print(Panel(detalle, title=f"Solicitud {r['folio']}", border_style="cyan"))
+
+
+# ---------------------------------------------------------------------------
+# Consultas 2, 3, 4 y 5
+# ---------------------------------------------------------------------------
+
+def elegir_orden_opcional(sesion, pregunta, formato):
+    ordenes = listar_ordenes()
+    if ordenes and confirmar(pregunta, False):
+        return elegir_de_lista("Orden de trabajo", ordenes, formato) or "cancelar"
+    return None
 
 
 def mostrar_consulta_actividades(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]CONSULTA DE ACTIVIDADES EN ORDEN DE TRABAJO[/]")
-    ordenes = listar_ordenes()
-    elegida = None
-    if ordenes and Confirm.ask("Filtrar por una orden de trabajo especifica?", default=False):
-        elegida = elegir_de_lista(
-            "Orden de trabajo",
-            ordenes,
-            lambda o: f"{o['num_orden']} | {o['folio']} | {o['nombre_equipo']}",
-        )
-        if not elegida:
-            return
-
-    filas = consultar_actividades_orden(elegida["num_orden"] if elegida else None)
-    if not filas:
-        console.print("[yellow]No hay actividades registradas.[/]")
+    titulo("Actividades de una orden de trabajo")
+    elegida = elegir_orden_opcional(
+        sesion,
+        "Filtrar por una orden de trabajo especifica?",
+        lambda o: f"{o['clave_mantenimiento']} | {o['folio']} | {o['nombre_equipo']}",
+    )
+    if elegida == "cancelar":
         return
 
-    tabla = Table(title="Actividades Realizadas en Orden de Trabajo", box=box.ROUNDED, header_style="bold cyan")
-    tabla.add_column("No. Orden", style="bold", no_wrap=True)
-    tabla.add_column("Descripcion de la actividad")
-    tabla.add_column("Fecha", no_wrap=True)
-    tabla.add_column("Resultado obtenido")
+    filas = consultar_actividades_orden(elegida["clave_mantenimiento"] if elegida else None)
+    if not filas:
+        print("No hay actividades registradas.")
+        return
 
-    for a in filas:
-        tabla.add_row(a["num_orden"], a["descripcion_actividad"], str(a["fecha_actividad"]), a["resultado"])
-    console.print(tabla)
+    print()
+    imprimir_tabla(
+        ["No. Orden", "Descripcion de la actividad", "Fecha", "Resultado obtenido"],
+        [
+            [a["clave_mantenimiento"], a["descripcion_historial"], a["fecha_historial"], a["resultado"]]
+            for a in filas
+        ],
+        [13, 34, 10, 28],
+    )
 
 
 def mostrar_consulta_ordenes_edificio(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]CONSULTA DE ORDENES DE TRABAJO POR EDIFICIO[/]")
+    titulo("Ordenes de trabajo por edificio")
     edificios = listar_edificios()
     edificio = None
-    if Confirm.ask("Filtrar por un edificio en especifico?", default=True):
+    if confirmar("Filtrar por un edificio en especifico?", True):
         edificio = elegir_de_lista("Edificio", edificios, lambda e: e["nombre_edificio"])
         if not edificio:
             return
 
     filas = consultar_ordenes_edificio(edificio["no_edificio"] if edificio else None)
     if not filas:
-        console.print("[yellow]No hay ordenes de trabajo para el criterio elegido.[/]")
+        print("No hay ordenes de trabajo para el criterio elegido.")
         return
 
-    console.print(f"\n[bold cyan]Ordenes de Trabajo ({len(filas)} registros)[/]")
+    print(f"\nOrdenes de Trabajo ({len(filas)} registros)")
     for o in filas:
         inicio = str(o["fecha_inicio"]) if o["fecha_inicio"] else "Pendiente"
         fin = str(o["fecha_fin"]) if o["fecha_fin"] else "Pendiente"
-        detalle = (
-            f"[bold]No. orden:[/] {o['num_orden']}   |   [bold]No. solicitud:[/] {o['folio']}   |   "
-            f"[bold]Edificio:[/] {o['nombre_edificio']}\n"
-            f"[bold]Tipo mantenimiento:[/] {o['descripcion_tipo']}\n"
-            f"[bold]Estado actual:[/] {o['descripcion_estado']}\n"
-            f"[bold]Creacion:[/] {o['fecha_creacion']}   |   [bold]Programada:[/] {o['fecha_programada']}\n"
-            f"[bold]Inicio:[/] {inicio}   |   [bold]Fin:[/] {fin}\n"
-            f"[bold]Observaciones:[/] {o['observaciones'] or 'Sin observaciones'}\n"
-            f"[bold]Costo mano de obra:[/] ${o['costo_mano_obra']:.2f}   |   "
-            f"[bold]Costo materiales:[/] ${o['costo_materiales']:.2f}"
+        imprimir_ficha(
+            f"Orden {o['clave_mantenimiento']}",
+            [
+                ("No. orden", o["clave_mantenimiento"]),
+                ("No. solicitud", o["folio"]),
+                ("Edificio", o["nombre_edificio"]),
+                ("Tipo de mantenimiento", o["descripcion_tipo"]),
+                ("Estado actual", o["descripcion_estado"]),
+                ("Trabajo a realizar", o["descripcion_trabajo"]),
+                ("Creacion", o["fecha_creacion"]),
+                ("Programada", o["fecha_programada"]),
+                ("Inicio", inicio),
+                ("Fin", fin),
+                ("Observaciones", o["observaciones"] or "Sin observaciones"),
+                ("Costo mano de obra", f"${float(o['costo_mano_obra']):.2f}"),
+                ("Costo materiales", f"${float(o['costo_materiales']):.2f}"),
+            ],
         )
-        console.print(Panel(detalle, title=f"Orden {o['num_orden']}", border_style="yellow"))
 
 
 def mostrar_consulta_tecnicos(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]CONSULTA DE TECNICOS ASIGNADOS A ORDENES[/]")
-    ordenes = listar_ordenes()
-    elegida = None
-    if ordenes and Confirm.ask("Filtrar por una orden de trabajo?", default=False):
-        elegida = elegir_de_lista(
-            "Orden de trabajo",
-            ordenes,
-            lambda o: f"{o['num_orden']} | {o['folio']} | {o['nombre_edificio']}",
-        )
-        if not elegida:
-            return
-
-    filas = consultar_tecnicos_orden(elegida["num_orden"] if elegida else None)
-    if not filas:
-        console.print("[yellow]No hay tecnicos asignados.[/]")
+    titulo("Tecnicos asignados a ordenes")
+    elegida = elegir_orden_opcional(
+        sesion,
+        "Filtrar por una orden de trabajo?",
+        lambda o: f"{o['clave_mantenimiento']} | {o['folio']} | {o['nombre_edificio']}",
+    )
+    if elegida == "cancelar":
         return
 
-    tabla = Table(title="Tecnicos Asignados a Ordenes de Trabajo", box=box.ROUNDED, header_style="bold cyan")
-    tabla.add_column("No. Orden", style="bold", no_wrap=True)
-    tabla.add_column("Tecnico")
-    tabla.add_column("Fecha asignacion", no_wrap=True)
-    tabla.add_column("Horas", justify="right", no_wrap=True)
-    tabla.add_column("Actividad a realizar")
+    filas = consultar_tecnicos_orden(elegida["clave_mantenimiento"] if elegida else None)
+    if not filas:
+        print("No hay tecnicos asignados.")
+        return
 
-    for t in filas:
-        tabla.add_row(
-            t["num_orden"],
-            t["nombre_tecnico"],
-            str(t["fecha_asignacion"]),
-            f"{t['horas_asignadas']:.2f}",
-            t["actividad_realizar"],
-        )
-    console.print(tabla)
+    print()
+    imprimir_tabla(
+        ["No. Orden", "Tecnico", "Fecha asig.", "Horas", "Actividad asignada"],
+        [
+            [
+                t["clave_mantenimiento"],
+                t["nombre_tecnico"],
+                t["fecha_asignacion"],
+                f"{float(t['horas_asignadas']):.2f}",
+                t["actividad_asignada"],
+            ]
+            for t in filas
+        ],
+        [13, 22, 11, 6, 34],
+    )
 
 
 def mostrar_consulta_planes(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold cyan]CONSULTA DE PLANES DE MANTENIMIENTO PREVENTIVO[/]")
+    titulo("Planes de mantenimiento preventivo")
     edificios = listar_edificios()
     edificio = None
-    if Confirm.ask("Filtrar por un edificio en especifico?", default=False):
+    if confirmar("Filtrar por un edificio en especifico?", False):
         edificio = elegir_de_lista("Edificio", edificios, lambda e: e["nombre_edificio"])
         if not edificio:
             return
 
     filas = consultar_planes_edificio(edificio["no_edificio"] if edificio else None)
     if not filas:
-        console.print("[yellow]No hay planes preventivos registrados.[/]")
+        print("No hay planes preventivos registrados.")
         return
 
-    tabla = Table(title="Planes de Mantenimiento Preventivo", box=box.ROUNDED, header_style="bold cyan")
-    tabla.add_column("No. Plan", style="bold", no_wrap=True)
-    tabla.add_column("Nombre del plan")
-    tabla.add_column("Edificio")
-    tabla.add_column("Descripcion")
-    tabla.add_column("Frecuencia")
-    tabla.add_column("Duracion (hrs)", justify="right")
-    tabla.add_column("Estado")
-
+    print(f"\nPlanes de Mantenimiento Preventivo ({len(filas)} registros)")
     for p in filas:
-        estado = f"[green]{p['estado_plan']}[/]" if p["estado_plan"] == "Activo" else f"[yellow]{p['estado_plan']}[/]"
-        tabla.add_row(
-            p["num_plan"],
-            p["nombre_plan"],
-            p["nombre_edificio"],
-            p["descripcion_plan"],
-            p["frecuencia"],
-            f"{p['duracion_estimada_horas']:.2f}",
-            estado,
+        imprimir_ficha(
+            f"Plan {p['num_plan']}",
+            [
+                ("No. plan", p["num_plan"]),
+                ("Nombre del plan", p["nombre_plan"]),
+                ("Edificio", p["nombre_edificio"]),
+                ("Equipo", p["nombre_equipo"]),
+                ("Descripcion", p["descripcion_plan"]),
+                ("Frecuencia", p["frecuencia"]),
+                ("Duracion estimada", f"{float(p['duracion_estimada_horas']):.2f} hrs"),
+                ("Estado", p["estado_plan"]),
+            ],
         )
-    console.print(tabla)
 
+
+# ---------------------------------------------------------------------------
+# Registros 2, 3, 4 y 5: personal de mantenimiento
+# ---------------------------------------------------------------------------
 
 def flujo_registrar_orden(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold yellow]REGISTRAR ORDEN DE TRABAJO[/]")
+    titulo("Registrar orden de trabajo")
     solicitudes = listar_solicitudes_disponibles()
     sol = elegir_de_lista(
         "Solicitud de mantenimiento",
@@ -409,43 +525,46 @@ def flujo_registrar_orden(sesion):
     )
     if not sol:
         return
+    print(f"Problema reportado: {sol['descripcion_reporte']}")
 
-    tipos, _ = listar_tipos_y_estados_orden()
     tipo = elegir_de_lista(
         "Tipo de mantenimiento",
-        tipos,
+        listar_tipos_mantenimiento(),
         lambda t: f"{t['nombre_tipo']} ({t['descripcion_tipo']})",
     )
     if not tipo:
         return
 
-    fecha_prog = pedir_fecha("Fecha programada")
+    fecha_prog = pedir_fecha("\nFecha programada")
     if not fecha_prog:
         return
 
-    obs = Prompt.ask("Observaciones (opcional)", default="", show_default=False).strip()
-    mano_obra = FloatPrompt.ask("Costo de mano de obra", default=0.0)
-    materiales = FloatPrompt.ask("Costo de materiales", default=0.0)
+    trabajo = pedir_texto("Descripcion del trabajo a realizar (0 para cancelar)", permitir_cancelar=True)
+    if not trabajo:
+        return
+    obs = entrada("Observaciones (opcional)")
+    mano_obra = pedir_decimal("Costo de mano de obra", 0.0)
+    materiales = pedir_decimal("Costo de materiales", 0.0)
 
-    num_orden = registrar_orden_trabajo(
+    clave = registrar_orden_trabajo(
         sol["folio"],
         tipo["id_tipo_mantenimiento"],
         fecha_prog,
+        trabajo,
         obs or None,
         mano_obra,
         materiales,
     )
-    console.print(f"\n[bold green]Orden de trabajo {num_orden} registrada correctamente.[/]")
+    print(f"\nOrden de trabajo {clave} registrada correctamente.")
 
 
 def flujo_asignar_tecnicos(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold yellow]ASIGNAR TECNICOS A ORDEN DE TRABAJO[/]")
-    ordenes = listar_ordenes()
+    titulo("Asignar tecnicos a una orden de trabajo")
     orden = elegir_de_lista(
         "Orden de trabajo",
-        ordenes,
-        lambda o: f"{o['num_orden']} | Solicitud {o['folio']} | {o['nombre_equipo']}",
+        listar_ordenes(),
+        lambda o: f"{o['clave_mantenimiento']} | Solicitud {o['folio']} | {o['nombre_equipo']}",
     )
     if not orden:
         return
@@ -454,7 +573,7 @@ def flujo_asignar_tecnicos(sesion):
     asignaciones = []
     elegidos_ids = set()
 
-    console.print("\n[bold yellow]Se requiere asignar al menos 2 tecnicos a la orden.[/]")
+    print("\nSe requiere asignar al menos 2 tecnicos a la orden.")
     while True:
         disponibles = [t for t in tecnicos if t["id_trabajador"] not in elegidos_ids]
         if not disponibles:
@@ -466,14 +585,12 @@ def flujo_asignar_tecnicos(sesion):
         )
         if not tecnico:
             if len(asignaciones) < 2:
-                console.print("[yellow]Asignacion cancelada.[/]")
+                print("Asignacion cancelada.")
                 return
             break
 
-        horas = FloatPrompt.ask(f"Horas asignadas a {tecnico['nombre_completo']}", default=2.0)
-        actividad = Prompt.ask("Actividad a realizar").strip()
-        while not actividad:
-            actividad = Prompt.ask("La actividad es obligatoria").strip()
+        horas = pedir_decimal(f"Horas asignadas a {tecnico['nombre_completo']}", 2.0)
+        actividad = pedir_texto("Actividad a realizar")
 
         asignaciones.append(
             {
@@ -484,33 +601,32 @@ def flujo_asignar_tecnicos(sesion):
         )
         elegidos_ids.add(tecnico["id_trabajador"])
 
-        if len(asignaciones) >= 2 and not Confirm.ask("Asignar otro tecnico adicional?", default=False):
+        if len(asignaciones) >= 2 and not confirmar("Asignar otro tecnico adicional?", False):
             break
 
-    asignar_tecnicos_orden(orden["num_orden"], asignaciones)
-    console.print(f"\n[bold green]{len(asignaciones)} tecnicos asignados a {orden['num_orden']}.[/]")
+    asignar_tecnicos_orden(orden["clave_mantenimiento"], asignaciones)
+    print(f"\n{len(asignaciones)} tecnicos asignados a {orden['clave_mantenimiento']}.")
 
 
 def flujo_registrar_actividades(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold yellow]REGISTRAR ACTIVIDADES EN ORDEN DE TRABAJO[/]")
-    ordenes = listar_ordenes()
+    titulo("Registrar actividades en una orden de trabajo")
     orden = elegir_de_lista(
         "Orden de trabajo",
-        ordenes,
-        lambda o: f"{o['num_orden']} | {o['nombre_equipo']} ({o['nombre_estado']})",
+        listar_ordenes(),
+        lambda o: f"{o['clave_mantenimiento']} | {o['nombre_equipo']} ({o['nombre_estado']})",
     )
     if not orden:
         return
 
     actividades = []
-    console.print("\n[bold yellow]Se requiere registrar al menos 2 actividades especificas.[/]")
+    print("\nSe requiere registrar al menos 2 actividades especificas.")
     while True:
         num_act = len(actividades) + 1
-        desc = Prompt.ask(f"Actividad #{num_act} - Descripcion (0 para cancelar)").strip()
+        desc = input(f"Actividad #{num_act} - Descripcion (0 para cancelar): ").strip()
         if desc == "0":
             if len(actividades) < 2:
-                console.print("[yellow]Registro de actividades cancelado.[/]")
+                print("Registro de actividades cancelado.")
                 return
             break
         if not desc:
@@ -519,37 +635,33 @@ def flujo_registrar_actividades(sesion):
         fecha_act = pedir_fecha(f"Actividad #{num_act} - Fecha")
         if not fecha_act:
             return
-        resultado = Prompt.ask(f"Actividad #{num_act} - Resultado obtenido").strip()
-        while not resultado:
-            resultado = Prompt.ask("El resultado obtenido es obligatorio").strip()
+        resultado = pedir_texto(f"Actividad #{num_act} - Resultado obtenido")
 
         actividades.append({"descripcion": desc, "fecha": fecha_act, "resultado": resultado})
-        if len(actividades) >= 2 and not Confirm.ask("Agregar otra actividad?", default=False):
+        if len(actividades) >= 2 and not confirmar("Agregar otra actividad?", False):
             break
 
-    finalizar = Confirm.ask("Marcar la orden de trabajo como Finalizada?", default=False)
-    registrar_actividades_orden(orden["num_orden"], actividades, finalizar_orden=finalizar)
-    console.print(f"\n[bold green]{len(actividades)} actividades registradas en {orden['num_orden']}.[/]")
+    finalizar = confirmar("Marcar la orden de trabajo como Solucionado?", False)
+    registrar_actividades_orden(orden["clave_mantenimiento"], actividades, finalizar_orden=finalizar)
+    print(f"\n{len(actividades)} actividades registradas en {orden['clave_mantenimiento']}.")
 
 
 def flujo_registrar_plan(sesion):
     limpiar_pantalla(sesion)
-    console.print("[bold yellow]REGISTRAR PLAN DE MANTENIMIENTO PREVENTIVO[/]")
-    edificios = listar_edificios()
-    edificio = elegir_de_lista("Edificio / instalacion", edificios, lambda e: e["nombre_edificio"])
+    titulo("Registrar plan de mantenimiento preventivo")
+    edificio = elegir_de_lista("Edificio / instalacion", listar_edificios(), lambda e: e["nombre_edificio"])
     if not edificio:
         return
 
-    equipos = listar_equipos_por_edificio(edificio["no_edificio"])
     equipo = elegir_de_lista(
         "Equipo de trabajo",
-        equipos,
+        listar_equipos_por_edificio(edificio["no_edificio"]),
         lambda eq: f"{eq['nombre_equipo']} (Salon {eq['salon']})",
     )
     if not equipo:
         return
 
-    nombre = pedir_texto("Nombre del plan (0 para cancelar)", permitir_cancelar=True)
+    nombre = pedir_texto("\nNombre del plan (0 para cancelar)", permitir_cancelar=True)
     if not nombre:
         return
     descripcion = pedir_texto("Descripcion del plan")
@@ -560,145 +672,211 @@ def flujo_registrar_plan(sesion):
     )
     if not frecuencia:
         return
-    duracion = FloatPrompt.ask("Duracion estimada en horas", default=2.0)
+    duracion = pedir_decimal("Duracion estimada en horas", 2.0)
     estado = elegir_de_lista("Estado del plan", ["Activo", "Inactivo"], lambda e: e)
     if not estado:
         return
 
     num_plan = registrar_plan_preventivo(
         nombre,
-        edificio["no_edificio"],
         equipo["codigo_inventario"],
         descripcion,
         frecuencia,
         duracion,
         estado,
     )
-    console.print(f"\n[bold green]Plan preventivo {num_plan} registrado correctamente.[/]")
+    print(f"\nPlan preventivo {num_plan} registrado correctamente.")
+
+
+def flujo_registrar_solucion(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar solucion y materiales utilizados")
+    reporte = elegir_de_lista(
+        "Reporte sin solucion",
+        listar_reportes_sin_solucion(),
+        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['nombre_equipo']} ({r['nombre_estado']})",
+    )
+    if not reporte:
+        return
+    print(f"Problema reportado: {reporte['descripcion_reporte']}")
+
+    aplicada = pedir_texto("\nSolucion aplicada (0 para cancelar)", permitir_cancelar=True)
+    if not aplicada:
+        return
+    tiempo = pedir_decimal("Tiempo de resolucion en horas", 1.0)
+    obs = entrada("Observaciones (opcional)")
+
+    materiales = []
+    usados = set()
+    while confirmar("Registrar un material utilizado?", False):
+        disponibles = [m for m in listar_materiales() if m["no_material"] not in usados]
+        material = elegir_de_lista(
+            "Material",
+            disponibles,
+            lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
+        )
+        if not material:
+            break
+        cantidad = pedir_entero(f"Cantidad usada de {material['nombre_material']}", 1)
+        if cantidad <= 0 or cantidad > material["existencia"]:
+            print(f"La cantidad debe estar entre 1 y {material['existencia']}.")
+            continue
+        materiales.append({"no_material": material["no_material"], "cantidad": cantidad})
+        usados.add(material["no_material"])
+
+    no_solucion = registrar_solucion(reporte["folio"], tiempo, aplicada, obs or None, materiales)
+    print(f"\nSolucion {no_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
+    print("El reporte quedo en estado Solucionado.")
+
+
+def mostrar_consulta_soluciones(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Soluciones aplicadas y materiales utilizados")
+    filas = consultar_soluciones()
+    if not filas:
+        print("No hay soluciones registradas.")
+        return
+
+    print(f"\nSoluciones ({len(filas)} registros)")
+    for s in filas:
+        if s["materiales"]:
+            mats = ", ".join(f"{m['nombre_material']} x{m['cantidad_usada']}" for m in s["materiales"])
+        else:
+            mats = "Sin materiales"
+        imprimir_ficha(
+            f"Solucion {s['no_solucion']}",
+            [
+                ("No. solicitud", s["folio"]),
+                ("Equipo", s["nombre_equipo"]),
+                ("Fecha de resolucion", s["fecha_resolucion"]),
+                ("Tiempo de resolucion", f"{float(s['tiempo_resolucion']):.2f} hrs"),
+                ("Solucion aplicada", s["solucion_aplicada"]),
+                ("Materiales utilizados", mats),
+                ("Observaciones", s["observaciones_solucion"] or "Sin observaciones"),
+            ],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Menus
+# ---------------------------------------------------------------------------
+
+def ejecutar_opcion(funcion, *args):
+    try:
+        funcion(*args)
+    except ValueError as e:
+        print(f"Aviso: {e}")
+    except Exception:
+        print("Ocurrio un problema al procesar la solicitud.")
 
 
 def menu_solicitante(sesion):
     while True:
         limpiar_pantalla(sesion)
-        console.print(
-            Panel(
-                "[bold][1][/] Registrar solicitud de mantenimiento\n"
-                "[bold][2][/] Consultar mis solicitudes por fecha\n"
-                "[bold][0][/] Cerrar sesion",
-                title="MENU SOLICITANTE",
-                border_style="cyan",
-            )
+        mostrar_menu(
+            "Menu solicitante",
+            [
+                ("1", "Registrar solicitud de mantenimiento"),
+                ("2", "Consultar mis solicitudes por fecha"),
+                ("0", "Cerrar sesion"),
+            ],
         )
-        op = Prompt.ask("Selecciona una opcion", choices=["0", "1", "2"], default="0")
+        op = pedir_opcion(["0", "1", "2"])
         if op == "0":
             break
-        try:
-            if op == "1":
-                flujo_registrar_solicitud(sesion)
-            elif op == "2":
-                mostrar_consulta_solicitudes(sesion, solo_mias=True)
-        except ValueError as e:
-            console.print(f"[bold red]Aviso:[/] {e}")
-        except Exception:
-            console.print("[bold red]Ocurrio un problema al procesar la solicitud.[/]")
+        if op == "1":
+            ejecutar_opcion(flujo_registrar_solicitud, sesion)
+        elif op == "2":
+            ejecutar_opcion(mostrar_consulta_solicitudes, sesion, True)
         pausar()
 
 
 def menu_consultas(sesion):
     while True:
         limpiar_pantalla(sesion)
-        console.print(
-            Panel(
-                "[bold][1][/] Solicitudes de mantenimiento por fecha\n"
-                "[bold][2][/] Actividades especificas de una orden de trabajo\n"
-                "[bold][3][/] Informacion de orden de trabajo por edificio\n"
-                "[bold][4][/] Tecnicos asignados a una orden de trabajo\n"
-                "[bold][5][/] Planes de mantenimiento preventivo por edificio\n"
-                "[bold][0][/] Regresar",
-                title="CONSULTAS",
-                border_style="green",
-            )
+        mostrar_menu(
+            "Consultas",
+            [
+                ("1", "Solicitudes de mantenimiento por fecha"),
+                ("2", "Actividades especificas de una orden de trabajo"),
+                ("3", "Informacion de orden de trabajo por edificio"),
+                ("4", "Tecnicos asignados a una orden de trabajo"),
+                ("5", "Planes de mantenimiento preventivo por edificio"),
+                ("6", "Soluciones aplicadas y materiales utilizados"),
+                ("0", "Regresar"),
+            ],
         )
-        op = Prompt.ask("Selecciona una opcion", choices=["0", "1", "2", "3", "4", "5"], default="0")
+        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6"])
         if op == "0":
             break
-        try:
-            if op == "1":
-                mostrar_consulta_solicitudes(sesion, solo_mias=False)
-            elif op == "2":
-                mostrar_consulta_actividades(sesion)
-            elif op == "3":
-                mostrar_consulta_ordenes_edificio(sesion)
-            elif op == "4":
-                mostrar_consulta_tecnicos(sesion)
-            elif op == "5":
-                mostrar_consulta_planes(sesion)
-        except ValueError as e:
-            console.print(f"[bold red]Aviso:[/] {e}")
-        except Exception:
-            console.print("[bold red]Ocurrio un problema al procesar la solicitud.[/]")
+        if op == "1":
+            ejecutar_opcion(mostrar_consulta_solicitudes, sesion, False)
+        elif op == "2":
+            ejecutar_opcion(mostrar_consulta_actividades, sesion)
+        elif op == "3":
+            ejecutar_opcion(mostrar_consulta_ordenes_edificio, sesion)
+        elif op == "4":
+            ejecutar_opcion(mostrar_consulta_tecnicos, sesion)
+        elif op == "5":
+            ejecutar_opcion(mostrar_consulta_planes, sesion)
+        elif op == "6":
+            ejecutar_opcion(mostrar_consulta_soluciones, sesion)
         pausar()
 
 
 def menu_mantenimiento(sesion):
     while True:
         limpiar_pantalla(sesion)
-        opciones_txt = (
-            "[bold][1][/] Registrar orden de trabajo de una solicitud\n"
-            "[bold][2][/] Asignar tecnicos a una orden de trabajo (minimo 2)\n"
-            "[bold][3][/] Registrar actividades especificas en una orden (minimo 2)\n"
-            "[bold][4][/] Registrar plan de mantenimiento preventivo\n"
-            "[bold][5][/] Consultas del sistema\n"
-        )
-        validas = ["0", "1", "2", "3", "4", "5"]
+        opciones = [
+            ("1", "Registrar orden de trabajo de una solicitud"),
+            ("2", "Asignar tecnicos a una orden de trabajo (minimo 2)"),
+            ("3", "Registrar actividades en una orden (minimo 2)"),
+            ("4", "Registrar solucion y materiales de un reporte"),
+            ("5", "Registrar plan de mantenimiento preventivo"),
+            ("6", "Consultas del sistema"),
+        ]
+        validas = ["0", "1", "2", "3", "4", "5", "6"]
         if sesion.get("es_supervisor"):
-            opciones_txt += "[bold][6][/] Registrar docente, administrativo o tecnico\n"
-            validas.append("6")
-        opciones_txt += "[bold][0][/] Cerrar sesion"
+            opciones.append(("7", "Registrar docente, administrativo o tecnico"))
+            validas.append("7")
+        opciones.append(("0", "Cerrar sesion"))
 
-        console.print(Panel(opciones_txt, title="MENU MANTENIMIENTO", border_style="yellow"))
-        op = Prompt.ask("Selecciona una opcion", choices=validas, default="0")
+        mostrar_menu("Menu mantenimiento", opciones)
+        op = pedir_opcion(validas)
         if op == "0":
             break
-        if op == "5":
+        if op == "6":
             menu_consultas(sesion)
             continue
-        try:
-            if op == "1":
-                flujo_registrar_orden(sesion)
-            elif op == "2":
-                flujo_asignar_tecnicos(sesion)
-            elif op == "3":
-                flujo_registrar_actividades(sesion)
-            elif op == "4":
-                flujo_registrar_plan(sesion)
-            elif op == "6":
-                flujo_registrar_personal(sesion)
-        except ValueError as e:
-            console.print(f"[bold red]Aviso:[/] {e}")
-        except Exception:
-            console.print("[bold red]Ocurrio un problema al procesar la solicitud.[/]")
+        if op == "1":
+            ejecutar_opcion(flujo_registrar_orden, sesion)
+        elif op == "2":
+            ejecutar_opcion(flujo_asignar_tecnicos, sesion)
+        elif op == "3":
+            ejecutar_opcion(flujo_registrar_actividades, sesion)
+        elif op == "4":
+            ejecutar_opcion(flujo_registrar_solucion, sesion)
+        elif op == "5":
+            ejecutar_opcion(flujo_registrar_plan, sesion)
+        elif op == "7":
+            ejecutar_opcion(flujo_registrar_personal, sesion)
         pausar()
 
 
 def flujo_login():
     limpiar_pantalla()
-    console.print(
-        Panel(
-            "Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).\n"
-            "[dim]Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234\n"
-            "Ejemplo mantenimiento: carlos.ramirez / 1234[/]",
-            title="INICIAR SESION",
-            border_style="#2B7FD9",
-        )
-    )
-    identificador = Prompt.ask("Correo o usuario (0 para cancelar)").strip()
+    titulo("Iniciar sesion")
+    print("Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).")
+    print("Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234")
+    print("Ejemplo mantenimiento: carlos.ramirez / 1234")
+    linea("-")
+    identificador = input("Correo o usuario (0 para cancelar): ").strip()
     if identificador == "0" or not identificador:
         return None
-    contrasena = Prompt.ask("Contrasena", password=True).strip()
+    contrasena = getpass("Contrasena: ").strip()
     sesion = iniciar_sesion(identificador, contrasena)
     if not sesion:
-        console.print("[bold red]Credenciales incorrectas. Verifica tu usuario/correo y contrasena.[/]")
+        print("Credenciales incorrectas. Verifica tu usuario/correo y contrasena.")
         pausar()
         return None
     return sesion
@@ -709,30 +887,24 @@ def main():
         cnx = conectar()
         cnx.close()
     except Exception:
-        console.print(
-            Panel(
-                "[bold red]No se pudo establecer conexion con el servidor del sistema.[/]\n"
-                "Verifica que el servicio este encendido e intenta nuevamente.",
-                title="Sin Conexion",
-                border_style="red",
-            )
-        )
+        titulo("Sin conexion")
+        print("No se pudo establecer conexion con el servidor del sistema.")
+        print("Verifica que MySQL este encendido en XAMPP e intenta nuevamente.")
         return
 
     while True:
         limpiar_pantalla()
-        console.print(
-            Panel(
-                "[bold][1][/] Iniciar sesion\n"
-                "[bold][2][/] Registrarme como estudiante\n"
-                "[bold][0][/] Salir",
-                title="ACCESO AL SISTEMA",
-                border_style="white",
-            )
+        mostrar_menu(
+            "Acceso al sistema",
+            [
+                ("1", "Iniciar sesion"),
+                ("2", "Registrarme como estudiante"),
+                ("0", "Salir"),
+            ],
         )
-        op = Prompt.ask("Selecciona una opcion", choices=["0", "1", "2"], default="1")
+        op = pedir_opcion(["0", "1", "2"], "1")
         if op == "0":
-            console.print("[cyan]Hasta luego.[/]")
+            print("Hasta luego.")
             break
         elif op == "1":
             sesion = flujo_login()
@@ -742,14 +914,12 @@ def main():
                 else:
                     menu_mantenimiento(sesion)
         elif op == "2":
-            try:
-                flujo_registro_estudiante()
-            except ValueError as e:
-                console.print(f"[bold red]Aviso:[/] {e}")
-            except Exception:
-                console.print("[bold red]No se pudo crear la cuenta. Intenta nuevamente.[/]")
+            ejecutar_opcion(flujo_registro_estudiante)
             pausar()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        print("\nHasta luego.")

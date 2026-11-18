@@ -19,7 +19,7 @@ def iniciar_sesion(identificador, contrasena):
         cursor.execute(
             """
             SELECT id_trabajador, usuario_acceso, correo, especialidad, id_supervisor,
-                   CONCAT_WS(' ', nombre, primer_apell, seg_apell) AS nombre_completo
+                   CONCAT_WS(' ', nombre, primer_apellido, segundo_apellido) AS nombre_completo
             FROM trabajador_mantenimiento
             WHERE (LOWER(usuario_acceso) = %s OR LOWER(correo) = %s) AND contrasena = %s
             """,
@@ -77,7 +77,7 @@ def existe_usuario_tecnico(usuario_acceso):
         cnx.close()
 
 
-def registrar_tecnico(usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell, especialidad, exp_laboral, id_supervisor):
+def registrar_tecnico(usuario_acceso, correo, contrasena, nombre, primer_apellido, segundo_apellido, especialidad, exp_laboral, id_supervisor):
     correo_limpio = correo.strip().lower()
     if not correo_limpio.endswith(DOMINIO_CORREO) or len(correo_limpio) <= len(DOMINIO_CORREO) or " " in correo_limpio:
         raise ValueError(f"El correo debe pertenecer al dominio {DOMINIO_CORREO}.")
@@ -97,11 +97,11 @@ def registrar_tecnico(usuario_acceso, correo, contrasena, nombre, primer_apell, 
         if cursor.fetchone():
             usuario_limpio = correo_limpio
 
-        seg = seg_apell.strip() if seg_apell and seg_apell.strip() else None
+        seg = segundo_apellido.strip() if segundo_apellido and segundo_apellido.strip() else None
         cursor.execute(
             """
             INSERT INTO trabajador_mantenimiento (
-                usuario_acceso, correo, contrasena, nombre, primer_apell, seg_apell,
+                usuario_acceso, correo, contrasena, nombre, primer_apellido, segundo_apellido,
                 especialidad, exp_laboral, id_supervisor
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
@@ -110,7 +110,7 @@ def registrar_tecnico(usuario_acceso, correo, contrasena, nombre, primer_apell, 
                 correo_limpio,
                 contrasena.strip(),
                 nombre.strip(),
-                primer_apell.strip(),
+                primer_apellido.strip(),
                 seg,
                 especialidad.strip(),
                 int(exp_laboral),

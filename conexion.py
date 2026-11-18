@@ -55,9 +55,30 @@ def reiniciar_base():
         cnx.close()
 
 
-def conectar():
-   
+_esquema_verificado = False
+
+
+def esquema_actualizado():
+    # El esquema nuevo tiene la tabla "estado" y la tabla intermedia "solucion_material".
+    # Si la base viene de la version anterior (estado_reporte, orden_trabajo...), se recrea.
+    cnx = mysql.connector.connect(**DB_CONFIG)
     try:
+        cursor = cnx.cursor()
+        cursor.execute("SHOW TABLES")
+        tablas = {fila[0] for fila in cursor.fetchall()}
+        cursor.close()
+        return {"estado", "solucion_material", "mantenimiento_trabajador"}.issubset(tablas)
+    finally:
+        cnx.close()
+
+
+def conectar():
+    global _esquema_verificado
+    try:
+        if not _esquema_verificado:
+            if not esquema_actualizado():
+                reiniciar_base()
+            _esquema_verificado = True
         cnx = mysql.connector.connect(**DB_CONFIG)
         return cnx
     except mysql.connector.Error as err:
