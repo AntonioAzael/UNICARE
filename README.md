@@ -14,10 +14,11 @@ Aplicacion de consola desarrollada en **Python** y conectada a **MySQL / MariaDB
 - `main.py`: control de acceso (login, auto-registro de estudiante y alta de personal por supervisor), limpieza de pantalla con encabezado fijo, menus segun el rol del usuario y las funciones de captura/impresion en consola.
 - `logo.py`: header del sistema donde se imprime el logo ASCII de **UNICARE** junto al titulo y subtitulo.
 - `conexion.py`: conexion a MySQL en XAMPP e inicializacion automatica de las tablas y catalogos si la base aun no existe o si viene de una version anterior del esquema.
-- `funciones/auth.py`: inicio de sesion diferenciando usuarios solicitantes y personal de mantenimiento.
+- `funciones/auth.py`: inicio de sesion, alta de personal y baja de tecnicos (solo supervisores; no se elimina a quien tenga trabajos asignados).
 - `funciones/solicitudes.py`: registro de solicitudes de mantenimiento y consulta de solicitudes por fecha.
 - `funciones/ordenes.py`: registro de ordenes de trabajo, asignacion de tecnicos, registro de actividades especificas y consultas relacionadas.
 - `funciones/soluciones.py`: registro de la solucion de un reporte con los materiales utilizados (descuenta existencia) y consulta de soluciones.
+- `funciones/materiales.py`: inventario, alta y baja de materiales, reabastecimiento y registro de material tomado (descuenta solo la cantidad indicada).
 - `funciones/planes.py`: registro y consulta de planes de mantenimiento preventivo por edificio y equipo.
 - `sql/01_tablas_mantenimiento.sql`: creacion de la base de datos `sistema_reportes_mantenimiento` y sus 16 tablas (14 entidades del DER + 2 tablas de relaciones M:M) con llaves primarias y foraneas.
 - `sql/02_catalogo_mantenimiento.sql`: carga inicial de catalogos y registros de ejemplo dentro de una transaccion.

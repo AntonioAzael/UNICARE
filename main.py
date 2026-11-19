@@ -6,7 +6,21 @@ from getpass import getpass
 
 from conexion import conectar
 from logo import mostrar_banner_unicare
-from funciones.auth import existe_usuario_tecnico, iniciar_sesion, registrar_tecnico
+from funciones.auth import (
+    eliminar_tecnico,
+    existe_usuario_tecnico,
+    iniciar_sesion,
+    listar_tecnicos_gestion,
+    registrar_tecnico,
+)
+from funciones.materiales import (
+    eliminar_material,
+    listar_inventario,
+    listar_soluciones_registradas,
+    reabastecer_material,
+    registrar_material,
+    registrar_material_tomado,
+)
 from funciones.ordenes import (
     asignar_tecnicos_orden,
     consultar_actividades_orden,
@@ -758,6 +772,190 @@ def mostrar_consulta_soluciones(sesion):
 
 
 # ---------------------------------------------------------------------------
+# Materiales y personal
+# ---------------------------------------------------------------------------
+
+def imprimir_inventario(materiales):
+    filas = []
+    for m in materiales:
+        aviso = "REPONER" if m["existencia"] <= m["stock_minimo"] else "ok"
+        filas.append([m["no_material"], m["nombre_material"], m["existencia"], m["stock_minimo"], aviso])
+    imprimir_tabla(["No.", "Material", "Existencia", "Minimo", "Estado"], filas, [8, 32, 10, 7, 8])
+
+
+def mostrar_inventario(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Inventario de materiales")
+    materiales = listar_inventario()
+    if not materiales:
+        print("No hay materiales registrados.")
+        return
+    print()
+    imprimir_inventario(materiales)
+
+
+def flujo_registrar_material(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar material nuevo")
+    nombre = pedir_texto("Nombre del material (0 para cancelar)", permitir_cancelar=True)
+    if not nombre:
+        return
+    descripcion = pedir_texto("Descripcion")
+    existencia = pedir_entero("Existencia inicial", 0)
+    minimo = pedir_entero("Stock minimo antes de reponer", 5)
+    no_material = registrar_material(nombre, descripcion, existencia, minimo)
+    print(f"\nMaterial {no_material} registrado con existencia de {existencia}.")
+
+
+def flujo_eliminar_material(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Eliminar material")
+    material = elegir_de_lista(
+        "Material a eliminar",
+        listar_inventario(),
+        lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
+    )
+    if not material:
+        return
+    print(f"\nSe eliminara por completo el material {material['nombre_material']} del inventario.")
+    if not confirmar("Seguro que deseas eliminarlo? Esta accion no se puede deshacer", False):
+        print("Operacion cancelada.")
+        return
+    nombre = eliminar_material(material["no_material"])
+    print(f"\nMaterial {nombre} eliminado del inventario.")
+
+
+def flujo_material_tomado(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar material tomado")
+    solucion = elegir_de_lista(
+        "Solucion a la que se asigna el material",
+        listar_soluciones_registradas(),
+        lambda s: f"Solucion {s['no_solucion']} | {s['folio']} | {s['nombre_equipo']}",
+    )
+    if not solucion:
+        return
+    material = elegir_de_lista(
+        "Material tomado",
+        listar_inventario(),
+        lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
+    )
+    if not material:
+        return
+    cantidad = pedir_entero(f"Cantidad tomada de {material['nombre_material']} (disponibles: {material['existencia']})", 1)
+    mat = registrar_material_tomado(solucion["no_solucion"], material["no_material"], cantidad)
+    print(f"\nSe tomaron {cantidad} de {mat['nombre_material']}. Existencia restante: {mat['existencia']}.")
+    if mat["existencia"] <= mat["stock_minimo"]:
+        print(f"Aviso: la existencia esta en o por debajo del minimo ({mat['stock_minimo']}). Conviene reponer.")
+
+
+def flujo_reabastecer_material(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Reabastecer material")
+    material = elegir_de_lista(
+        "Material a reabastecer",
+        listar_inventario(),
+        lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
+    )
+    if not material:
+        return
+    cantidad = pedir_entero(f"Cantidad que ingresa de {material['nombre_material']}", 1)
+    mat = reabastecer_material(material["no_material"], cantidad)
+    print(f"\nExistencia actualizada de {mat['nombre_material']}: {mat['existencia']}.")
+
+
+def menu_materiales(sesion):
+    while True:
+        limpiar_pantalla(sesion)
+        mostrar_menu(
+            "Gestion de materiales",
+            [
+                ("1", "Ver inventario"),
+                ("2", "Registrar material nuevo"),
+                ("3", "Registrar material tomado (descuenta solo la cantidad)"),
+                ("4", "Reabastecer material"),
+                ("5", "Eliminar material"),
+                ("0", "Regresar"),
+            ],
+        )
+        op = pedir_opcion(["0", "1", "2", "3", "4", "5"])
+        if op == "0":
+            break
+        if op == "1":
+            ejecutar_opcion(mostrar_inventario, sesion)
+        elif op == "2":
+            ejecutar_opcion(flujo_registrar_material, sesion)
+        elif op == "3":
+            ejecutar_opcion(flujo_material_tomado, sesion)
+        elif op == "4":
+            ejecutar_opcion(flujo_reabastecer_material, sesion)
+        elif op == "5":
+            ejecutar_opcion(flujo_eliminar_material, sesion)
+        pausar()
+
+
+def mostrar_tecnicos(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Tecnicos de mantenimiento")
+    tecnicos = listar_tecnicos_gestion()
+    print()
+    imprimir_tabla(
+        ["Id", "Tecnico", "Especialidad", "Supervisor", "Trabajos"],
+        [
+            [t["id_trabajador"], t["nombre_completo"], t["especialidad"], t["nombre_supervisor"] or "Ninguno", t["asignaciones"]]
+            for t in tecnicos
+        ],
+        [4, 26, 22, 14, 8],
+    )
+
+
+def flujo_eliminar_tecnico(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Eliminar tecnico")
+    tecnico = elegir_de_lista(
+        "Tecnico a eliminar",
+        listar_tecnicos_gestion(),
+        lambda t: f"{t['nombre_completo']} ({t['especialidad']}) - {t['asignaciones']} trabajos",
+    )
+    if not tecnico:
+        return
+    if not confirmar(f"Seguro que deseas eliminar a {tecnico['nombre_completo']}? No se puede deshacer", False):
+        print("Operacion cancelada.")
+        return
+    nombre, supervisados = eliminar_tecnico(tecnico["id_trabajador"], sesion["id"])
+    print(f"\nTecnico {nombre} eliminado.")
+    if supervisados:
+        print(f"Sus {supervisados} supervisado(s) pasaron a su supervisor.")
+
+
+def menu_personal(sesion):
+    if not sesion.get("es_supervisor"):
+        print("Solo un supervisor puede registrar o eliminar personal.")
+        return
+    while True:
+        limpiar_pantalla(sesion)
+        mostrar_menu(
+            "Gestion de personal",
+            [
+                ("1", "Registrar docente, administrativo o tecnico"),
+                ("2", "Eliminar tecnico"),
+                ("3", "Ver tecnicos"),
+                ("0", "Regresar"),
+            ],
+        )
+        op = pedir_opcion(["0", "1", "2", "3"])
+        if op == "0":
+            break
+        if op == "1":
+            ejecutar_opcion(flujo_registrar_personal, sesion)
+        elif op == "2":
+            ejecutar_opcion(flujo_eliminar_tecnico, sesion)
+        elif op == "3":
+            ejecutar_opcion(mostrar_tecnicos, sesion)
+        pausar()
+
+
+# ---------------------------------------------------------------------------
 # Menus
 # ---------------------------------------------------------------------------
 
@@ -833,20 +1031,25 @@ def menu_mantenimiento(sesion):
             ("3", "Registrar actividades en una orden (minimo 2)"),
             ("4", "Registrar solucion y materiales de un reporte"),
             ("5", "Registrar plan de mantenimiento preventivo"),
-            ("6", "Consultas del sistema"),
+            ("6", "Gestion de materiales (inventario, altas, bajas)"),
+            ("7", "Consultas del sistema"),
+            ("8", "Gestion de personal (registro y baja de tecnicos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
+            ("0", "Cerrar sesion"),
         ]
-        validas = ["0", "1", "2", "3", "4", "5", "6"]
-        if sesion.get("es_supervisor"):
-            opciones.append(("7", "Registrar docente, administrativo o tecnico"))
-            validas.append("7")
-        opciones.append(("0", "Cerrar sesion"))
-
         mostrar_menu("Menu mantenimiento", opciones)
-        op = pedir_opcion(validas)
+        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6", "7", "8"])
         if op == "0":
             break
         if op == "6":
+            menu_materiales(sesion)
+            continue
+        if op == "7":
             menu_consultas(sesion)
+            continue
+        if op == "8":
+            menu_personal(sesion)
+            if not sesion.get("es_supervisor"):
+                pausar()
             continue
         if op == "1":
             ejecutar_opcion(flujo_registrar_orden, sesion)
@@ -858,8 +1061,6 @@ def menu_mantenimiento(sesion):
             ejecutar_opcion(flujo_registrar_solucion, sesion)
         elif op == "5":
             ejecutar_opcion(flujo_registrar_plan, sesion)
-        elif op == "7":
-            ejecutar_opcion(flujo_registrar_personal, sesion)
         pausar()
 
 
