@@ -7,9 +7,10 @@ def listar_inventario():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT no_material, nombre_material, descripcion_material, existencia, stock_minimo
-            FROM material
-            ORDER BY nombre_material
+            SELECT m.no_material, m.nombre_material, m.descripcion_material, m.existencia, m.stock_minimo,
+                   (SELECT COUNT(*) FROM solucion_material sm WHERE sm.no_material = m.no_material) AS usos
+            FROM material m
+            ORDER BY m.nombre_material
             """
         )
         filas = cursor.fetchall()

@@ -71,13 +71,22 @@ def titulo(texto):
     linea()
 
 
+def mensaje(texto, sangria=""):
+    # Imprime un mensaje del sistema acomodado a ANCHO columnas.
+    # Los saltos de linea iniciales ("\n...") se respetan.
+    cuerpo = texto.lstrip("\n")
+    saltos = "\n" * (len(texto) - len(cuerpo))
+    # break_on_hyphens=False evita partir correos como usuario@ut-tijuana.edu.mx en el guion
+    print(saltos + textwrap.fill(cuerpo, ANCHO, subsequent_indent=sangria, break_on_hyphens=False))
+
+
 def limpiar_pantalla(sesion=None):
     if sys.stdout.isatty():
         os.system("cls" if os.name == "nt" else "clear")
     mostrar_banner_unicare()
     if sesion:
         rol_txt = "Mantenimiento" if sesion["rol"] == "mantenimiento" else "Solicitante"
-        print(f"Sesion: {sesion['nombre']} ({rol_txt} - {sesion['detalle']})")
+        mensaje(f"Sesion: {sesion['nombre']} ({rol_txt} - {sesion['detalle']})", "        ")
         linea("-")
 
 
@@ -100,7 +109,7 @@ def pedir_texto(etiqueta, permitir_cancelar=False):
             return None
         if valor:
             return valor
-        print("Este campo no puede quedar vacio.")
+        mensaje("Este campo no puede quedar vacio.")
 
 
 def pedir_contrasena(etiqueta):
@@ -108,7 +117,7 @@ def pedir_contrasena(etiqueta):
         valor = getpass(f"{etiqueta}: ").strip()
         if valor:
             return valor
-        print("La contrasena no puede ir vacia.")
+        mensaje("La contrasena no puede ir vacia.")
 
 
 def pedir_entero(etiqueta, defecto=None):
@@ -117,7 +126,7 @@ def pedir_entero(etiqueta, defecto=None):
         try:
             return int(valor)
         except ValueError:
-            print("Escribe un numero entero.")
+            mensaje("Escribe un numero entero.")
 
 
 def pedir_decimal(etiqueta, defecto=None):
@@ -126,11 +135,11 @@ def pedir_decimal(etiqueta, defecto=None):
         try:
             numero = float(valor)
             if numero < 0:
-                print("El valor no puede ser negativo.")
+                mensaje("El valor no puede ser negativo.")
                 continue
             return numero
         except ValueError:
-            print("Escribe un numero valido (ej. 2.5).")
+            mensaje("Escribe un numero valido (ej. 2.5).")
 
 
 def confirmar(pregunta, defecto=False):
@@ -141,7 +150,7 @@ def confirmar(pregunta, defecto=False):
             return True
         if r in ("n", "no"):
             return False
-        print("Responde s o n.")
+        mensaje("Responde s o n.")
 
 
 def pedir_opcion(validas, defecto="0"):
@@ -149,7 +158,7 @@ def pedir_opcion(validas, defecto="0"):
         op = entrada("Selecciona una opcion", defecto)
         if op in validas:
             return op
-        print("Opcion no valida.")
+        mensaje("Opcion no valida.")
 
 
 def pedir_fecha(etiqueta, defecto=None):
@@ -161,7 +170,7 @@ def pedir_fecha(etiqueta, defecto=None):
         try:
             return datetime.strptime(valor, "%Y-%m-%d").date()
         except ValueError:
-            print("Formato invalido. Usa AAAA-MM-DD.")
+            mensaje("Formato invalido. Usa AAAA-MM-DD.")
 
 
 def pedir_correo(etiqueta="Correo institucional (0 para cancelar)"):
@@ -171,19 +180,19 @@ def pedir_correo(etiqueta="Correo institucional (0 para cancelar)"):
             return None
         if valor.endswith(DOMINIO_CORREO) and len(valor) > len(DOMINIO_CORREO) and " " not in valor:
             return valor
-        print(f"Correo invalido. Debe ser institucional {DOMINIO_CORREO} (ej. 0323105973{DOMINIO_CORREO}).")
+        mensaje(f"Correo invalido. Debe ser institucional {DOMINIO_CORREO} (ej. 0323105973{DOMINIO_CORREO}).")
 
 
 def elegir_de_lista(titulo_lista, opciones, formato):
     if not opciones:
-        print(f"No hay registros disponibles para {titulo_lista}.")
+        mensaje(f"No hay registros disponibles para {titulo_lista}.")
         return None
 
-    print(f"\n{titulo_lista}")
+    mensaje(f"\n{titulo_lista}")
     linea("-")
     for i, item in enumerate(opciones, start=1):
-        print(f"  {i}. {formato(item)}")
-    print("  0. Cancelar")
+        mensaje(f"  {i}. {formato(item)}", " " * (len(str(i)) + 4))
+    mensaje("  0. Cancelar")
 
     validas = [str(i) for i in range(0, len(opciones) + 1)]
     eleccion = pedir_opcion(validas, "0")
@@ -196,7 +205,7 @@ def mostrar_menu(titulo_menu, opciones):
     # opciones: lista de (clave, texto)
     titulo(titulo_menu)
     for clave, texto in opciones:
-        print(f" {clave}. {texto}")
+        mensaje(f" {clave}. {texto}")
     linea("-")
 
 
@@ -220,9 +229,9 @@ def imprimir_tabla(encabezados, filas, anchos):
 
 
 def imprimir_ficha(encabezado, campos):
-    print(f"\n--- {encabezado} ---")
+    mensaje(f"\n--- {encabezado} ---")
     for etiqueta, valor in campos:
-        print(f"{etiqueta}: {valor}")
+        mensaje(f"{etiqueta}: {valor}", "    ")
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +252,7 @@ def flujo_registro_estudiante(sesion=None):
     contrasena = pedir_contrasena("Crea una contrasena")
 
     registrar_usuario("Estudiante", correo, contrasena, nombre, ap1, ap2 or None)
-    print(f"\nCuenta creada correctamente. Ya puedes iniciar sesion con {correo}.")
+    mensaje(f"\nCuenta creada correctamente. Ya puedes iniciar sesion con {correo}.")
     return correo
 
 
@@ -270,14 +279,14 @@ def flujo_registrar_personal(sesion):
             return
         contrasena = pedir_contrasena("Contrasena asignada")
         registrar_usuario(tipo, correo, contrasena, nombre, ap1, ap2 or None)
-        print(f"\n{tipo} registrado correctamente ({correo}).")
+        mensaje(f"\n{tipo} registrado correctamente ({correo}).")
     else:
         correo = pedir_correo("Correo institucional del tecnico (0 para cancelar)")
         if not correo:
             return
         sugerido = f"{nombre.split()[0].lower()}.{ap1.split()[0].lower()}"
         if existe_usuario_tecnico(sugerido):
-            print(
+            mensaje(
                 f"Ya existe un tecnico con el usuario '{sugerido}'. "
                 f"Escribe otro usuario o presiona Enter para usar tu correo ({correo})."
             )
@@ -287,10 +296,14 @@ def flujo_registrar_personal(sesion):
         especialidad = pedir_texto("Especialidad")
         exp = pedir_entero("Anios de experiencia laboral", 1)
         contrasena = pedir_contrasena("Contrasena asignada")
+        # Un supervisor es un tecnico sin jefe (id_supervisor vacio)
+        sera_supervisor = confirmar("Sera supervisor (tendra los mismos permisos que tu)?", False)
         usuario_creado = registrar_tecnico(
-            usuario_acc, correo, contrasena, nombre, ap1, ap2 or None, especialidad, exp, sesion["id"]
+            usuario_acc, correo, contrasena, nombre, ap1, ap2 or None, especialidad, exp,
+            None if sera_supervisor else sesion["id"],
         )
-        print(f"\nTecnico registrado correctamente ({usuario_creado}).")
+        rol = "supervisor" if sera_supervisor else f"tecnico a cargo de {sesion.get('nombre', 'ti')}"
+        mensaje(f"\nTecnico registrado correctamente ({usuario_creado}) como {rol}.")
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +351,7 @@ def flujo_registrar_solicitud(sesion):
         descripcion,
         observaciones or None,
     )
-    print(f"\nSolicitud registrada con numero {folio}.")
+    mensaje(f"\nSolicitud registrada con numero {folio}.")
 
 
 def mostrar_consulta_solicitudes(sesion, solo_mias=False):
@@ -347,12 +360,12 @@ def mostrar_consulta_solicitudes(sesion, solo_mias=False):
     uid = sesion["id"] if solo_mias else None
     fechas = listar_fechas_solicitudes(uid)
     if solo_mias and not fechas:
-        print("\nAun no tienes solicitudes registradas.")
+        mensaje("\nAun no tienes solicitudes registradas.")
         return
     if fechas:
-        print("\nFechas con solicitudes registradas:")
+        mensaje("\nFechas con solicitudes registradas:")
         for f in fechas[:5]:
-            print(f"  {f['fecha_registro']} ({f['total']} registros)")
+            mensaje(f"  {f['fecha_registro']} ({f['total']} registros)")
         print()
 
     fecha = pedir_fecha("Fecha a consultar", fechas[0]["fecha_registro"] if fechas else None)
@@ -361,10 +374,10 @@ def mostrar_consulta_solicitudes(sesion, solo_mias=False):
 
     filas = consultar_solicitudes_por_fecha(fecha, uid)
     if not filas:
-        print(f"No se encontraron solicitudes registradas en {fecha}.")
+        mensaje(f"No se encontraron solicitudes registradas en {fecha}.")
         return
 
-    print(f"\nSolicitudes de Mantenimiento ({fecha}) - {len(filas)} registros")
+    mensaje(f"\nSolicitudes de Mantenimiento ({fecha}) - {len(filas)} registros")
     for r in filas:
         imprimir_ficha(
             f"Solicitud {r['folio']}",
@@ -406,7 +419,7 @@ def mostrar_consulta_actividades(sesion):
 
     filas = consultar_actividades_orden(elegida["clave_mantenimiento"] if elegida else None)
     if not filas:
-        print("No hay actividades registradas.")
+        mensaje("No hay actividades registradas.")
         return
 
     print()
@@ -432,10 +445,10 @@ def mostrar_consulta_ordenes_edificio(sesion):
 
     filas = consultar_ordenes_edificio(edificio["no_edificio"] if edificio else None)
     if not filas:
-        print("No hay ordenes de trabajo para el criterio elegido.")
+        mensaje("No hay ordenes de trabajo para el criterio elegido.")
         return
 
-    print(f"\nOrdenes de Trabajo ({len(filas)} registros)")
+    mensaje(f"\nOrdenes de Trabajo ({len(filas)} registros)")
     for o in filas:
         inicio = str(o["fecha_inicio"]) if o["fecha_inicio"] else "Pendiente"
         fin = str(o["fecha_fin"]) if o["fecha_fin"] else "Pendiente"
@@ -472,7 +485,7 @@ def mostrar_consulta_tecnicos(sesion):
 
     filas = consultar_tecnicos_orden(elegida["clave_mantenimiento"] if elegida else None)
     if not filas:
-        print("No hay tecnicos asignados.")
+        mensaje("No hay tecnicos asignados.")
         return
 
     print()
@@ -504,10 +517,10 @@ def mostrar_consulta_planes(sesion):
 
     filas = consultar_planes_edificio(edificio["no_edificio"] if edificio else None)
     if not filas:
-        print("No hay planes preventivos registrados.")
+        mensaje("No hay planes preventivos registrados.")
         return
 
-    print(f"\nPlanes de Mantenimiento Preventivo ({len(filas)} registros)")
+    mensaje(f"\nPlanes de Mantenimiento Preventivo ({len(filas)} registros)")
     for p in filas:
         imprimir_ficha(
             f"Plan {p['num_plan']}",
@@ -539,7 +552,7 @@ def flujo_registrar_orden(sesion):
     )
     if not sol:
         return
-    print(f"Problema reportado: {sol['descripcion_reporte']}")
+    mensaje(f"Problema reportado: {sol['descripcion_reporte']}")
 
     tipo = elegir_de_lista(
         "Tipo de mantenimiento",
@@ -569,7 +582,7 @@ def flujo_registrar_orden(sesion):
         mano_obra,
         materiales,
     )
-    print(f"\nOrden de trabajo {clave} registrada correctamente.")
+    mensaje(f"\nOrden de trabajo {clave} registrada correctamente.")
 
 
 def flujo_asignar_tecnicos(sesion):
@@ -587,7 +600,7 @@ def flujo_asignar_tecnicos(sesion):
     asignaciones = []
     elegidos_ids = set()
 
-    print("\nSe requiere asignar al menos 2 tecnicos a la orden.")
+    mensaje("\nSe requiere asignar al menos 2 tecnicos a la orden.")
     while True:
         disponibles = [t for t in tecnicos if t["id_trabajador"] not in elegidos_ids]
         if not disponibles:
@@ -599,7 +612,7 @@ def flujo_asignar_tecnicos(sesion):
         )
         if not tecnico:
             if len(asignaciones) < 2:
-                print("Asignacion cancelada.")
+                mensaje("Asignacion cancelada.")
                 return
             break
 
@@ -619,7 +632,7 @@ def flujo_asignar_tecnicos(sesion):
             break
 
     asignar_tecnicos_orden(orden["clave_mantenimiento"], asignaciones)
-    print(f"\n{len(asignaciones)} tecnicos asignados a {orden['clave_mantenimiento']}.")
+    mensaje(f"\n{len(asignaciones)} tecnicos asignados a {orden['clave_mantenimiento']}.")
 
 
 def flujo_registrar_actividades(sesion):
@@ -634,13 +647,13 @@ def flujo_registrar_actividades(sesion):
         return
 
     actividades = []
-    print("\nSe requiere registrar al menos 2 actividades especificas.")
+    mensaje("\nSe requiere registrar al menos 2 actividades especificas.")
     while True:
         num_act = len(actividades) + 1
         desc = input(f"Actividad #{num_act} - Descripcion (0 para cancelar): ").strip()
         if desc == "0":
             if len(actividades) < 2:
-                print("Registro de actividades cancelado.")
+                mensaje("Registro de actividades cancelado.")
                 return
             break
         if not desc:
@@ -657,7 +670,7 @@ def flujo_registrar_actividades(sesion):
 
     finalizar = confirmar("Marcar la orden de trabajo como Solucionado?", False)
     registrar_actividades_orden(orden["clave_mantenimiento"], actividades, finalizar_orden=finalizar)
-    print(f"\n{len(actividades)} actividades registradas en {orden['clave_mantenimiento']}.")
+    mensaje(f"\n{len(actividades)} actividades registradas en {orden['clave_mantenimiento']}.")
 
 
 def flujo_registrar_plan(sesion):
@@ -699,7 +712,7 @@ def flujo_registrar_plan(sesion):
         duracion,
         estado,
     )
-    print(f"\nPlan preventivo {num_plan} registrado correctamente.")
+    mensaje(f"\nPlan preventivo {num_plan} registrado correctamente.")
 
 
 def flujo_registrar_solucion(sesion):
@@ -712,7 +725,7 @@ def flujo_registrar_solucion(sesion):
     )
     if not reporte:
         return
-    print(f"Problema reportado: {reporte['descripcion_reporte']}")
+    mensaje(f"Problema reportado: {reporte['descripcion_reporte']}")
 
     aplicada = pedir_texto("\nSolucion aplicada (0 para cancelar)", permitir_cancelar=True)
     if not aplicada:
@@ -733,14 +746,14 @@ def flujo_registrar_solucion(sesion):
             break
         cantidad = pedir_entero(f"Cantidad usada de {material['nombre_material']}", 1)
         if cantidad <= 0 or cantidad > material["existencia"]:
-            print(f"La cantidad debe estar entre 1 y {material['existencia']}.")
+            mensaje(f"La cantidad debe estar entre 1 y {material['existencia']}.")
             continue
         materiales.append({"no_material": material["no_material"], "cantidad": cantidad})
         usados.add(material["no_material"])
 
     no_solucion = registrar_solucion(reporte["folio"], tiempo, aplicada, obs or None, materiales)
-    print(f"\nSolucion {no_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
-    print("El reporte quedo en estado Solucionado.")
+    mensaje(f"\nSolucion {no_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
+    mensaje("El reporte quedo en estado Solucionado.")
 
 
 def mostrar_consulta_soluciones(sesion):
@@ -748,10 +761,10 @@ def mostrar_consulta_soluciones(sesion):
     titulo("Soluciones aplicadas y materiales utilizados")
     filas = consultar_soluciones()
     if not filas:
-        print("No hay soluciones registradas.")
+        mensaje("No hay soluciones registradas.")
         return
 
-    print(f"\nSoluciones ({len(filas)} registros)")
+    mensaje(f"\nSoluciones ({len(filas)} registros)")
     for s in filas:
         if s["materiales"]:
             mats = ", ".join(f"{m['nombre_material']} x{m['cantidad_usada']}" for m in s["materiales"])
@@ -788,7 +801,7 @@ def mostrar_inventario(sesion):
     titulo("Inventario de materiales")
     materiales = listar_inventario()
     if not materiales:
-        print("No hay materiales registrados.")
+        mensaje("No hay materiales registrados.")
         return
     print()
     imprimir_inventario(materiales)
@@ -804,7 +817,7 @@ def flujo_registrar_material(sesion):
     existencia = pedir_entero("Existencia inicial", 0)
     minimo = pedir_entero("Stock minimo antes de reponer", 5)
     no_material = registrar_material(nombre, descripcion, existencia, minimo)
-    print(f"\nMaterial {no_material} registrado con existencia de {existencia}.")
+    mensaje(f"\nMaterial {no_material} registrado con existencia de {existencia}.")
 
 
 def flujo_eliminar_material(sesion):
@@ -813,16 +826,24 @@ def flujo_eliminar_material(sesion):
     material = elegir_de_lista(
         "Material a eliminar",
         listar_inventario(),
-        lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
+        lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})"
+        + (f" - usado en {m['usos']} solucion(es)" if m["usos"] else ""),
     )
     if not material:
         return
-    print(f"\nSe eliminara por completo el material {material['nombre_material']} del inventario.")
-    if not confirmar("Seguro que deseas eliminarlo? Esta accion no se puede deshacer", False):
-        print("Operacion cancelada.")
+    # Se valida antes de pedir confirmacion; eliminar_material vuelve a revisarlo como respaldo
+    if material["usos"]:
+        mensaje(
+            f"\nAviso: {material['nombre_material']} ya se utilizo en {material['usos']} solucion(es) "
+            "y no puede eliminarse para no perder el historial. Si ya no hay, deja su existencia en 0."
+        )
+        return
+    mensaje(f"\nSe eliminara por completo el material {material['nombre_material']} del inventario.")
+    if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
+        mensaje("Operacion cancelada.")
         return
     nombre = eliminar_material(material["no_material"])
-    print(f"\nMaterial {nombre} eliminado del inventario.")
+    mensaje(f"\nMaterial {nombre} eliminado del inventario.")
 
 
 def flujo_material_tomado(sesion):
@@ -844,9 +865,9 @@ def flujo_material_tomado(sesion):
         return
     cantidad = pedir_entero(f"Cantidad tomada de {material['nombre_material']} (disponibles: {material['existencia']})", 1)
     mat = registrar_material_tomado(solucion["no_solucion"], material["no_material"], cantidad)
-    print(f"\nSe tomaron {cantidad} de {mat['nombre_material']}. Existencia restante: {mat['existencia']}.")
+    mensaje(f"\nSe tomaron {cantidad} de {mat['nombre_material']}. Existencia restante: {mat['existencia']}.")
     if mat["existencia"] <= mat["stock_minimo"]:
-        print(f"Aviso: la existencia esta en o por debajo del minimo ({mat['stock_minimo']}). Conviene reponer.")
+        mensaje(f"Aviso: la existencia esta en o por debajo del minimo ({mat['stock_minimo']}). Conviene reponer.")
 
 
 def flujo_reabastecer_material(sesion):
@@ -861,7 +882,7 @@ def flujo_reabastecer_material(sesion):
         return
     cantidad = pedir_entero(f"Cantidad que ingresa de {material['nombre_material']}", 1)
     mat = reabastecer_material(material["no_material"], cantidad)
-    print(f"\nExistencia actualizada de {mat['nombre_material']}: {mat['existencia']}.")
+    mensaje(f"\nExistencia actualizada de {mat['nombre_material']}: {mat['existencia']}.")
 
 
 def menu_materiales(sesion):
@@ -912,25 +933,41 @@ def mostrar_tecnicos(sesion):
 def flujo_eliminar_tecnico(sesion):
     limpiar_pantalla(sesion)
     titulo("Eliminar tecnico")
+    # El usuario con la sesion abierta no aparece: no puede eliminarse a si mismo
+    tecnicos = [t for t in listar_tecnicos_gestion() if t["id_trabajador"] != sesion["id"]]
     tecnico = elegir_de_lista(
         "Tecnico a eliminar",
-        listar_tecnicos_gestion(),
+        tecnicos,
         lambda t: f"{t['nombre_completo']} ({t['especialidad']}) - {t['asignaciones']} trabajos",
     )
     if not tecnico:
         return
-    if not confirmar(f"Seguro que deseas eliminar a {tecnico['nombre_completo']}? No se puede deshacer", False):
-        print("Operacion cancelada.")
+    # Se valida antes de pedir confirmacion; eliminar_tecnico vuelve a revisarlo como respaldo
+    if tecnico["asignaciones"]:
+        mensaje(
+            f"\nAviso: {tecnico['nombre_completo']} tiene trabajos asignados en ordenes de "
+            "mantenimiento y no puede eliminarse para no perder el historial."
+        )
+        return
+    if tecnico["supervisados"] and tecnico["id_supervisor"] is None:
+        mensaje(
+            f"\nAviso: {tecnico['nombre_completo']} es supervisor de {tecnico['supervisados']} "
+            "tecnico(s) y no tiene un supervisor a quien pasarlos. Reasigna primero esa supervision."
+        )
+        return
+    mensaje(f"\nSe eliminara a {tecnico['nombre_completo']} del personal de mantenimiento.")
+    if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
+        mensaje("Operacion cancelada.")
         return
     nombre, supervisados = eliminar_tecnico(tecnico["id_trabajador"], sesion["id"])
-    print(f"\nTecnico {nombre} eliminado.")
+    mensaje(f"\nTecnico {nombre} eliminado.")
     if supervisados:
-        print(f"Sus {supervisados} supervisado(s) pasaron a su supervisor.")
+        mensaje(f"Sus {supervisados} supervisado(s) pasaron a su supervisor.")
 
 
 def menu_personal(sesion):
     if not sesion.get("es_supervisor"):
-        print("Solo un supervisor puede registrar o eliminar personal.")
+        mensaje("Solo un supervisor puede registrar o eliminar personal.")
         return
     while True:
         limpiar_pantalla(sesion)
@@ -963,9 +1000,9 @@ def ejecutar_opcion(funcion, *args):
     try:
         funcion(*args)
     except ValueError as e:
-        print(f"Aviso: {e}")
+        mensaje(f"Aviso: {e}")
     except Exception:
-        print("Ocurrio un problema al procesar la solicitud.")
+        mensaje("Ocurrio un problema al procesar la solicitud.")
 
 
 def menu_solicitante(sesion):
@@ -1067,9 +1104,9 @@ def menu_mantenimiento(sesion):
 def flujo_login():
     limpiar_pantalla()
     titulo("Iniciar sesion")
-    print("Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).")
-    print("Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234")
-    print("Ejemplo mantenimiento: carlos.ramirez / 1234")
+    mensaje("Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).")
+    mensaje("Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234")
+    mensaje("Ejemplo mantenimiento: carlos.ramirez / 1234")
     linea("-")
     identificador = input("Correo o usuario (0 para cancelar): ").strip()
     if identificador == "0" or not identificador:
@@ -1077,7 +1114,7 @@ def flujo_login():
     contrasena = getpass("Contrasena: ").strip()
     sesion = iniciar_sesion(identificador, contrasena)
     if not sesion:
-        print("Credenciales incorrectas. Verifica tu usuario/correo y contrasena.")
+        mensaje("Credenciales incorrectas. Verifica tu usuario/correo y contrasena.")
         pausar()
         return None
     return sesion
@@ -1089,8 +1126,8 @@ def main():
         cnx.close()
     except Exception:
         titulo("Sin conexion")
-        print("No se pudo establecer conexion con el servidor del sistema.")
-        print("Verifica que MySQL este encendido en XAMPP e intenta nuevamente.")
+        mensaje("No se pudo establecer conexion con el servidor del sistema.")
+        mensaje("Verifica que MySQL este encendido en XAMPP e intenta nuevamente.")
         return
 
     while True:
@@ -1105,7 +1142,7 @@ def main():
         )
         op = pedir_opcion(["0", "1", "2"], "1")
         if op == "0":
-            print("Hasta luego.")
+            mensaje("Hasta luego.")
             break
         elif op == "1":
             sesion = flujo_login()
@@ -1123,4 +1160,4 @@ if __name__ == "__main__":
     try:
         main()
     except (KeyboardInterrupt, EOFError):
-        print("\nHasta luego.")
+        mensaje("\nHasta luego.")

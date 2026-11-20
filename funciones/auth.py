@@ -139,7 +139,8 @@ def listar_tecnicos_gestion():
                    CONCAT_WS(' ', t.nombre, t.primer_apellido, t.segundo_apellido) AS nombre_completo,
                    t.especialidad, t.correo, t.id_supervisor,
                    CONCAT_WS(' ', s.nombre, s.primer_apellido) AS nombre_supervisor,
-                   (SELECT COUNT(*) FROM mantenimiento_trabajador mt WHERE mt.id_trabajador = t.id_trabajador) AS asignaciones
+                   (SELECT COUNT(*) FROM mantenimiento_trabajador mt WHERE mt.id_trabajador = t.id_trabajador) AS asignaciones,
+                   (SELECT COUNT(*) FROM trabajador_mantenimiento sub WHERE sub.id_supervisor = t.id_trabajador) AS supervisados
             FROM trabajador_mantenimiento t
             LEFT JOIN trabajador_mantenimiento s ON s.id_trabajador = t.id_supervisor
             ORDER BY t.id_trabajador

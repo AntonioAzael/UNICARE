@@ -14,6 +14,12 @@ def listar_solicitudes_disponibles():
             FROM reporte r
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
+            WHERE r.nombre_estado NOT IN ('Solucionado', 'Cancelado')
+              -- Oculta los reportes que ya tienen una orden de trabajo vigente (no cancelada)
+              AND NOT EXISTS (
+                  SELECT 1 FROM mantenimiento m
+                  WHERE m.folio = r.folio AND m.nombre_estado <> 'Cancelado'
+              )
             ORDER BY r.fecha_registro DESC, r.folio DESC
             """
         )
@@ -111,6 +117,16 @@ def registrar_orden_trabajo(
     try:
         cnx.start_transaction()
         cursor = cnx.cursor(dictionary=True)
+        # Respaldo del filtro de listar_solicitudes_disponibles: una orden vigente por reporte
+        cursor.execute(
+            "SELECT clave_mantenimiento FROM mantenimiento WHERE folio = %s AND nombre_estado <> 'Cancelado'",
+            (folio,),
+        )
+        vigente = cursor.fetchone()
+        if vigente:
+            raise ValueError(
+                f"La solicitud {folio} ya tiene la orden de trabajo {vigente['clave_mantenimiento']}."
+            )
         clave = _siguiente_clave(cursor, hoy.year)
         cursor.execute(
             """
@@ -219,11 +235,6 @@ def registrar_actividades_orden(clave_mantenimiento, actividades, finalizar_orde
                 WHERE clave_mantenimiento = %s
                 """,
                 (hoy, hoy, clave_mantenimiento),
-            )
-            cursor.execute(
-                "UPDATE reporte SET nombre_estado = 'Solucionado' "
-                "WHERE folio = (SELECT folio FROM mantenimiento WHERE clave_mantenimiento = %s)",
-                (clave_mantenimiento,),
             )
         cnx.commit()
         cursor.close()
