@@ -13,7 +13,7 @@ def listar_reportes_sin_solucion():
             FROM reporte r
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             LEFT JOIN solucion s ON s.folio = r.folio
-            WHERE s.no_solucion IS NULL
+            WHERE s.numero_solucion IS NULL
             ORDER BY r.fecha_registro DESC, r.folio DESC
             """
         )
@@ -29,7 +29,7 @@ def listar_materiales():
     try:
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
-            "SELECT no_material, nombre_material, existencia, stock_minimo FROM material ORDER BY nombre_material"
+            "SELECT codigo_material, nombre_material, existencia, stock_minimo FROM material ORDER BY nombre_material"
         )
         filas = cursor.fetchall()
         cursor.close()
@@ -40,7 +40,7 @@ def listar_materiales():
 
 def registrar_solucion(folio, tiempo_resolucion, solucion_aplicada, observaciones=None, materiales=None):
     # Registro 6: Registrar la solucion de un reporte y los materiales utilizados
-    # materiales: lista de {"no_material": ..., "cantidad": ...}
+    # materiales: lista de {"codigo_material": ..., "cantidad": ...}
     texto = solucion_aplicada.strip()
     if not texto:
         raise ValueError("La solucion aplicada no puede ir vacia.")
@@ -65,20 +65,20 @@ def registrar_solucion(folio, tiempo_resolucion, solucion_aplicada, observacione
             """,
             (date.today(), tiempo_resolucion, texto, obs, folio),
         )
-        no_solucion = cursor.lastrowid
+        numero_solucion = cursor.lastrowid
 
         for item in materiales:
-            cursor.execute("SELECT existencia, nombre_material FROM material WHERE no_material = %s", (item["no_material"],))
+            cursor.execute("SELECT existencia, nombre_material FROM material WHERE codigo_material = %s", (item["codigo_material"],))
             mat = cursor.fetchone()
             if not mat or mat["existencia"] < item["cantidad"]:
-                raise ValueError(f"No hay existencia suficiente de {mat['nombre_material'] if mat else item['no_material']}.")
+                raise ValueError(f"No hay existencia suficiente de {mat['nombre_material'] if mat else item['codigo_material']}.")
             cursor.execute(
-                "INSERT INTO solucion_material (no_solucion, no_material, cantidad_usada) VALUES (%s, %s, %s)",
-                (no_solucion, item["no_material"], item["cantidad"]),
+                "INSERT INTO solucion_material (numero_solucion, codigo_material, cantidad_usada) VALUES (%s, %s, %s)",
+                (numero_solucion, item["codigo_material"], item["cantidad"]),
             )
             cursor.execute(
-                "UPDATE material SET existencia = existencia - %s WHERE no_material = %s",
-                (item["cantidad"], item["no_material"]),
+                "UPDATE material SET existencia = existencia - %s WHERE codigo_material = %s",
+                (item["cantidad"], item["codigo_material"]),
             )
 
         cursor.execute("UPDATE reporte SET nombre_estado = 'Solucionado' WHERE folio = %s", (folio,))
@@ -89,7 +89,7 @@ def registrar_solucion(folio, tiempo_resolucion, solucion_aplicada, observacione
         )
         cnx.commit()
         cursor.close()
-        return no_solucion
+        return numero_solucion
     except Exception:
         cnx.rollback()
         raise
@@ -104,12 +104,12 @@ def consultar_soluciones():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT s.no_solucion, s.folio, e.nombre_equipo, s.fecha_resolucion, s.tiempo_resolucion,
+            SELECT s.numero_solucion, s.folio, e.nombre_equipo, s.fecha_resolucion, s.tiempo_resolucion,
                    s.solucion_aplicada, s.observaciones_solucion
             FROM solucion s
             INNER JOIN reporte r ON r.folio = s.folio
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            ORDER BY s.fecha_resolucion DESC, s.no_solucion DESC
+            ORDER BY s.fecha_resolucion DESC, s.numero_solucion DESC
             """
         )
         soluciones = cursor.fetchall()
@@ -118,11 +118,11 @@ def consultar_soluciones():
                 """
                 SELECT m.nombre_material, sm.cantidad_usada
                 FROM solucion_material sm
-                INNER JOIN material m ON m.no_material = sm.no_material
-                WHERE sm.no_solucion = %s
+                INNER JOIN material m ON m.codigo_material = sm.codigo_material
+                WHERE sm.numero_solucion = %s
                 ORDER BY m.nombre_material
                 """,
-                (sol["no_solucion"],),
+                (sol["numero_solucion"],),
             )
             sol["materiales"] = cursor.fetchall()
         cursor.close()

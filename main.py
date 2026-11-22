@@ -296,11 +296,11 @@ def flujo_registrar_personal(sesion):
         especialidad = pedir_texto("Especialidad")
         exp = pedir_entero("Anios de experiencia laboral", 1)
         contrasena = pedir_contrasena("Contrasena asignada")
-        # Un supervisor es un tecnico sin jefe (id_supervisor vacio)
+        # Un supervisor es un tecnico sin jefe (empleado_supervisor vacio)
         sera_supervisor = confirmar("Sera supervisor (tendra los mismos permisos que tu)?", False)
         usuario_creado = registrar_tecnico(
             usuario_acc, correo, contrasena, nombre, ap1, ap2 or None, especialidad, exp,
-            None if sera_supervisor else sesion["id"],
+            None if sera_supervisor else sesion["numero"],
         )
         rol = "supervisor" if sera_supervisor else f"tecnico a cargo de {sesion.get('nombre', 'ti')}"
         mensaje(f"\nTecnico registrado correctamente ({usuario_creado}) como {rol}.")
@@ -344,7 +344,7 @@ def flujo_registrar_solicitud(sesion):
     observaciones = entrada("Observaciones (opcional)")
 
     folio = registrar_solicitud(
-        sesion["id"],
+        sesion["numero"],
         equipo["codigo_inventario"],
         categoria["nombre_categoria"],
         prioridad["nombre_prioridad"],
@@ -357,7 +357,7 @@ def flujo_registrar_solicitud(sesion):
 def mostrar_consulta_solicitudes(sesion, solo_mias=False):
     limpiar_pantalla(sesion)
     titulo("Mis solicitudes por fecha" if solo_mias else "Consulta de solicitudes por fecha")
-    uid = sesion["id"] if solo_mias else None
+    uid = sesion["numero"] if solo_mias else None
     fechas = listar_fechas_solicitudes(uid)
     if solo_mias and not fechas:
         mensaje("\nAun no tienes solicitudes registradas.")
@@ -443,7 +443,7 @@ def mostrar_consulta_ordenes_edificio(sesion):
         if not edificio:
             return
 
-    filas = consultar_ordenes_edificio(edificio["no_edificio"] if edificio else None)
+    filas = consultar_ordenes_edificio(edificio["clave_edificio"] if edificio else None)
     if not filas:
         mensaje("No hay ordenes de trabajo para el criterio elegido.")
         return
@@ -515,7 +515,7 @@ def mostrar_consulta_planes(sesion):
         if not edificio:
             return
 
-    filas = consultar_planes_edificio(edificio["no_edificio"] if edificio else None)
+    filas = consultar_planes_edificio(edificio["clave_edificio"] if edificio else None)
     if not filas:
         mensaje("No hay planes preventivos registrados.")
         return
@@ -523,9 +523,9 @@ def mostrar_consulta_planes(sesion):
     mensaje(f"\nPlanes de Mantenimiento Preventivo ({len(filas)} registros)")
     for p in filas:
         imprimir_ficha(
-            f"Plan {p['num_plan']}",
+            f"Plan {p['clave_plan']}",
             [
-                ("No. plan", p["num_plan"]),
+                ("No. plan", p["clave_plan"]),
                 ("Nombre del plan", p["nombre_plan"]),
                 ("Edificio", p["nombre_edificio"]),
                 ("Equipo", p["nombre_equipo"]),
@@ -575,7 +575,7 @@ def flujo_registrar_orden(sesion):
 
     clave = registrar_orden_trabajo(
         sol["folio"],
-        tipo["id_tipo_mantenimiento"],
+        tipo["codigo_tipo"],
         fecha_prog,
         trabajo,
         obs or None,
@@ -602,7 +602,7 @@ def flujo_asignar_tecnicos(sesion):
 
     mensaje("\nSe requiere asignar al menos 2 tecnicos a la orden.")
     while True:
-        disponibles = [t for t in tecnicos if t["id_trabajador"] not in elegidos_ids]
+        disponibles = [t for t in tecnicos if t["numero_empleado"] not in elegidos_ids]
         if not disponibles:
             break
         tecnico = elegir_de_lista(
@@ -621,12 +621,12 @@ def flujo_asignar_tecnicos(sesion):
 
         asignaciones.append(
             {
-                "id_trabajador": tecnico["id_trabajador"],
+                "numero_empleado": tecnico["numero_empleado"],
                 "horas": horas,
                 "actividad": actividad,
             }
         )
-        elegidos_ids.add(tecnico["id_trabajador"])
+        elegidos_ids.add(tecnico["numero_empleado"])
 
         if len(asignaciones) >= 2 and not confirmar("Asignar otro tecnico adicional?", False):
             break
@@ -682,7 +682,7 @@ def flujo_registrar_plan(sesion):
 
     equipo = elegir_de_lista(
         "Equipo de trabajo",
-        listar_equipos_por_edificio(edificio["no_edificio"]),
+        listar_equipos_por_edificio(edificio["clave_edificio"]),
         lambda eq: f"{eq['nombre_equipo']} (Salon {eq['salon']})",
     )
     if not equipo:
@@ -704,7 +704,7 @@ def flujo_registrar_plan(sesion):
     if not estado:
         return
 
-    num_plan = registrar_plan_preventivo(
+    clave_plan = registrar_plan_preventivo(
         nombre,
         equipo["codigo_inventario"],
         descripcion,
@@ -712,7 +712,7 @@ def flujo_registrar_plan(sesion):
         duracion,
         estado,
     )
-    mensaje(f"\nPlan preventivo {num_plan} registrado correctamente.")
+    mensaje(f"\nPlan preventivo {clave_plan} registrado correctamente.")
 
 
 def flujo_registrar_solucion(sesion):
@@ -736,7 +736,7 @@ def flujo_registrar_solucion(sesion):
     materiales = []
     usados = set()
     while confirmar("Registrar un material utilizado?", False):
-        disponibles = [m for m in listar_materiales() if m["no_material"] not in usados]
+        disponibles = [m for m in listar_materiales() if m["codigo_material"] not in usados]
         material = elegir_de_lista(
             "Material",
             disponibles,
@@ -748,11 +748,11 @@ def flujo_registrar_solucion(sesion):
         if cantidad <= 0 or cantidad > material["existencia"]:
             mensaje(f"La cantidad debe estar entre 1 y {material['existencia']}.")
             continue
-        materiales.append({"no_material": material["no_material"], "cantidad": cantidad})
-        usados.add(material["no_material"])
+        materiales.append({"codigo_material": material["codigo_material"], "cantidad": cantidad})
+        usados.add(material["codigo_material"])
 
-    no_solucion = registrar_solucion(reporte["folio"], tiempo, aplicada, obs or None, materiales)
-    mensaje(f"\nSolucion {no_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
+    numero_solucion = registrar_solucion(reporte["folio"], tiempo, aplicada, obs or None, materiales)
+    mensaje(f"\nSolucion {numero_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
     mensaje("El reporte quedo en estado Solucionado.")
 
 
@@ -771,7 +771,7 @@ def mostrar_consulta_soluciones(sesion):
         else:
             mats = "Sin materiales"
         imprimir_ficha(
-            f"Solucion {s['no_solucion']}",
+            f"Solucion {s['numero_solucion']}",
             [
                 ("No. solicitud", s["folio"]),
                 ("Equipo", s["nombre_equipo"]),
@@ -792,7 +792,7 @@ def imprimir_inventario(materiales):
     filas = []
     for m in materiales:
         aviso = "REPONER" if m["existencia"] <= m["stock_minimo"] else "ok"
-        filas.append([m["no_material"], m["nombre_material"], m["existencia"], m["stock_minimo"], aviso])
+        filas.append([m["codigo_material"], m["nombre_material"], m["existencia"], m["stock_minimo"], aviso])
     imprimir_tabla(["No.", "Material", "Existencia", "Minimo", "Estado"], filas, [8, 32, 10, 7, 8])
 
 
@@ -816,8 +816,8 @@ def flujo_registrar_material(sesion):
     descripcion = pedir_texto("Descripcion")
     existencia = pedir_entero("Existencia inicial", 0)
     minimo = pedir_entero("Stock minimo antes de reponer", 5)
-    no_material = registrar_material(nombre, descripcion, existencia, minimo)
-    mensaje(f"\nMaterial {no_material} registrado con existencia de {existencia}.")
+    codigo_material = registrar_material(nombre, descripcion, existencia, minimo)
+    mensaje(f"\nMaterial {codigo_material} registrado con existencia de {existencia}.")
 
 
 def flujo_eliminar_material(sesion):
@@ -842,7 +842,7 @@ def flujo_eliminar_material(sesion):
     if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
         mensaje("Operacion cancelada.")
         return
-    nombre = eliminar_material(material["no_material"])
+    nombre = eliminar_material(material["codigo_material"])
     mensaje(f"\nMaterial {nombre} eliminado del inventario.")
 
 
@@ -852,7 +852,7 @@ def flujo_material_tomado(sesion):
     solucion = elegir_de_lista(
         "Solucion a la que se asigna el material",
         listar_soluciones_registradas(),
-        lambda s: f"Solucion {s['no_solucion']} | {s['folio']} | {s['nombre_equipo']}",
+        lambda s: f"Solucion {s['numero_solucion']} | {s['folio']} | {s['nombre_equipo']}",
     )
     if not solucion:
         return
@@ -864,7 +864,7 @@ def flujo_material_tomado(sesion):
     if not material:
         return
     cantidad = pedir_entero(f"Cantidad tomada de {material['nombre_material']} (disponibles: {material['existencia']})", 1)
-    mat = registrar_material_tomado(solucion["no_solucion"], material["no_material"], cantidad)
+    mat = registrar_material_tomado(solucion["numero_solucion"], material["codigo_material"], cantidad)
     mensaje(f"\nSe tomaron {cantidad} de {mat['nombre_material']}. Existencia restante: {mat['existencia']}.")
     if mat["existencia"] <= mat["stock_minimo"]:
         mensaje(f"Aviso: la existencia esta en o por debajo del minimo ({mat['stock_minimo']}). Conviene reponer.")
@@ -881,7 +881,7 @@ def flujo_reabastecer_material(sesion):
     if not material:
         return
     cantidad = pedir_entero(f"Cantidad que ingresa de {material['nombre_material']}", 1)
-    mat = reabastecer_material(material["no_material"], cantidad)
+    mat = reabastecer_material(material["codigo_material"], cantidad)
     mensaje(f"\nExistencia actualizada de {mat['nombre_material']}: {mat['existencia']}.")
 
 
@@ -923,7 +923,7 @@ def mostrar_tecnicos(sesion):
     imprimir_tabla(
         ["Id", "Tecnico", "Especialidad", "Supervisor", "Trabajos"],
         [
-            [t["id_trabajador"], t["nombre_completo"], t["especialidad"], t["nombre_supervisor"] or "Ninguno", t["asignaciones"]]
+            [t["numero_empleado"], t["nombre_completo"], t["especialidad"], t["nombre_supervisor"] or "Ninguno", t["asignaciones"]]
             for t in tecnicos
         ],
         [4, 26, 22, 14, 8],
@@ -934,7 +934,7 @@ def flujo_eliminar_tecnico(sesion):
     limpiar_pantalla(sesion)
     titulo("Eliminar tecnico")
     # El usuario con la sesion abierta no aparece: no puede eliminarse a si mismo
-    tecnicos = [t for t in listar_tecnicos_gestion() if t["id_trabajador"] != sesion["id"]]
+    tecnicos = [t for t in listar_tecnicos_gestion() if t["numero_empleado"] != sesion["numero"]]
     tecnico = elegir_de_lista(
         "Tecnico a eliminar",
         tecnicos,
@@ -949,7 +949,7 @@ def flujo_eliminar_tecnico(sesion):
             "mantenimiento y no puede eliminarse para no perder el historial."
         )
         return
-    if tecnico["supervisados"] and tecnico["id_supervisor"] is None:
+    if tecnico["supervisados"] and tecnico["empleado_supervisor"] is None:
         mensaje(
             f"\nAviso: {tecnico['nombre_completo']} es supervisor de {tecnico['supervisados']} "
             "tecnico(s) y no tiene un supervisor a quien pasarlos. Reasigna primero esa supervision."
@@ -959,7 +959,7 @@ def flujo_eliminar_tecnico(sesion):
     if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
         mensaje("Operacion cancelada.")
         return
-    nombre, supervisados = eliminar_tecnico(tecnico["id_trabajador"], sesion["id"])
+    nombre, supervisados = eliminar_tecnico(tecnico["numero_empleado"], sesion["numero"])
     mensaje(f"\nTecnico {nombre} eliminado.")
     if supervisados:
         mensaje(f"Sus {supervisados} supervisado(s) pasaron a su supervisor.")

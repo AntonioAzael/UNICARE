@@ -13,7 +13,7 @@ USE sistema_reportes_mantenimiento;
 -- 1. Catalogos y tablas padre
 
 CREATE TABLE usuario (
-    num_usuario INT PRIMARY KEY AUTO_INCREMENT,
+    numero_cuenta INT PRIMARY KEY AUTO_INCREMENT,
     tipo_usuario VARCHAR(25) NOT NULL,
     correo VARCHAR(80) NOT NULL UNIQUE,
     contrasena VARCHAR(60) NOT NULL DEFAULT '1234',
@@ -40,27 +40,27 @@ CREATE TABLE estado (
 );
 
 CREATE TABLE edificio (
-    no_edificio VARCHAR(10) PRIMARY KEY,
+    clave_edificio VARCHAR(10) PRIMARY KEY,
     nombre_edificio VARCHAR(60) NOT NULL UNIQUE
 );
 
 CREATE TABLE tipo_mantenimiento (
-    id_tipo_mantenimiento VARCHAR(10) PRIMARY KEY,
+    codigo_tipo VARCHAR(10) PRIMARY KEY,
     nombre_tipo VARCHAR(30) NOT NULL UNIQUE,
     descripcion_tipo VARCHAR(150) NOT NULL
 );
 
 CREATE TABLE material (
-    no_material VARCHAR(10) PRIMARY KEY,
+    codigo_material VARCHAR(10) PRIMARY KEY,
     nombre_material VARCHAR(60) NOT NULL,
     stock_minimo INT NOT NULL,
     existencia INT NOT NULL,
     descripcion_material VARCHAR(150) NOT NULL
 );
 
--- id_supervisor es la relacion recursiva SUPERVISA (un trabajador supervisa a otros)
+-- empleado_supervisor es la relacion recursiva SUPERVISA (un trabajador supervisa a otros)
 CREATE TABLE trabajador_mantenimiento (
-    id_trabajador INT PRIMARY KEY AUTO_INCREMENT,
+    numero_empleado INT PRIMARY KEY AUTO_INCREMENT,
     usuario_acceso VARCHAR(80) NOT NULL UNIQUE,
     correo VARCHAR(80) NOT NULL UNIQUE,
     contrasena VARCHAR(60) NOT NULL DEFAULT '1234',
@@ -69,8 +69,8 @@ CREATE TABLE trabajador_mantenimiento (
     segundo_apellido VARCHAR(30),
     especialidad VARCHAR(40) NOT NULL,
     exp_laboral INT NOT NULL,
-    id_supervisor INT NULL,
-    FOREIGN KEY (id_supervisor) REFERENCES trabajador_mantenimiento(id_trabajador)
+    empleado_supervisor INT NULL,
+    FOREIGN KEY (empleado_supervisor) REFERENCES trabajador_mantenimiento(numero_empleado)
 );
 
 -- 2. Equipos y solicitudes (reportes)
@@ -83,8 +83,8 @@ CREATE TABLE equipo_instalacion (
     area VARCHAR(40) NOT NULL,
     piso VARCHAR(20) NOT NULL,
     salon VARCHAR(20) NOT NULL,
-    no_edificio VARCHAR(10) NOT NULL,
-    FOREIGN KEY (no_edificio) REFERENCES edificio(no_edificio)
+    clave_edificio VARCHAR(10) NOT NULL,
+    FOREIGN KEY (clave_edificio) REFERENCES edificio(clave_edificio)
 );
 
 CREATE TABLE reporte (
@@ -92,12 +92,12 @@ CREATE TABLE reporte (
     descripcion_reporte VARCHAR(250) NOT NULL,
     observaciones VARCHAR(250),
     fecha_registro DATE NOT NULL,
-    num_usuario INT NOT NULL,
+    numero_cuenta INT NOT NULL,
     nombre_estado VARCHAR(20) NOT NULL,
     nombre_categoria VARCHAR(25) NOT NULL,
     nombre_prioridad VARCHAR(15) NOT NULL,
     codigo_inventario VARCHAR(15) NOT NULL,
-    FOREIGN KEY (num_usuario) REFERENCES usuario(num_usuario),
+    FOREIGN KEY (numero_cuenta) REFERENCES usuario(numero_cuenta),
     FOREIGN KEY (nombre_estado) REFERENCES estado(nombre_estado),
     FOREIGN KEY (nombre_categoria) REFERENCES categoria(nombre_categoria),
     FOREIGN KEY (nombre_prioridad) REFERENCES prioridad(nombre_prioridad),
@@ -106,7 +106,7 @@ CREATE TABLE reporte (
 
 -- REPORTE 1:1 SOLUCION (folio UNIQUE)
 CREATE TABLE solucion (
-    no_solucion INT PRIMARY KEY AUTO_INCREMENT,
+    numero_solucion INT PRIMARY KEY AUTO_INCREMENT,
     fecha_resolucion DATE NOT NULL,
     tiempo_resolucion DECIMAL(5,2) NOT NULL,
     solucion_aplicada VARCHAR(250) NOT NULL,
@@ -127,16 +127,16 @@ CREATE TABLE mantenimiento (
     observaciones VARCHAR(250),
     costo_mano_obra DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     costo_materiales DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    id_tipo_mantenimiento VARCHAR(10) NOT NULL,
+    codigo_tipo VARCHAR(10) NOT NULL,
     folio VARCHAR(15) NOT NULL,
     nombre_estado VARCHAR(20) NOT NULL,
-    FOREIGN KEY (id_tipo_mantenimiento) REFERENCES tipo_mantenimiento(id_tipo_mantenimiento),
+    FOREIGN KEY (codigo_tipo) REFERENCES tipo_mantenimiento(codigo_tipo),
     FOREIGN KEY (folio) REFERENCES reporte(folio),
     FOREIGN KEY (nombre_estado) REFERENCES estado(nombre_estado)
 );
 
 CREATE TABLE historial_mantenimiento (
-    no_historial INT PRIMARY KEY AUTO_INCREMENT,
+    consecutivo_historial INT PRIMARY KEY AUTO_INCREMENT,
     fecha_historial DATE NOT NULL,
     descripcion_historial VARCHAR(250) NOT NULL,
     resultado VARCHAR(150) NOT NULL,
@@ -146,7 +146,7 @@ CREATE TABLE historial_mantenimiento (
 );
 
 CREATE TABLE plan_mantenimiento (
-    num_plan VARCHAR(15) PRIMARY KEY,
+    clave_plan VARCHAR(15) PRIMARY KEY,
     nombre_plan VARCHAR(80) NOT NULL,
     descripcion_plan VARCHAR(250) NOT NULL,
     frecuencia VARCHAR(40) NOT NULL,
@@ -161,21 +161,21 @@ CREATE TABLE plan_mantenimiento (
 -- PARTICIPA_EN: TRABAJADOR M:M MANTENIMIENTO
 CREATE TABLE mantenimiento_trabajador (
     clave_mantenimiento VARCHAR(15),
-    id_trabajador INT,
+    numero_empleado INT,
     fecha_asignacion DATE NOT NULL,
     horas_asignadas DECIMAL(5,2) NOT NULL,
     actividad_asignada VARCHAR(200) NOT NULL,
-    PRIMARY KEY (clave_mantenimiento, id_trabajador),
+    PRIMARY KEY (clave_mantenimiento, numero_empleado),
     FOREIGN KEY (clave_mantenimiento) REFERENCES mantenimiento(clave_mantenimiento),
-    FOREIGN KEY (id_trabajador) REFERENCES trabajador_mantenimiento(id_trabajador)
+    FOREIGN KEY (numero_empleado) REFERENCES trabajador_mantenimiento(numero_empleado)
 );
 
 -- UTILIZA: SOLUCION M:M MATERIAL
 CREATE TABLE solucion_material (
-    no_solucion INT,
-    no_material VARCHAR(10),
+    numero_solucion INT,
+    codigo_material VARCHAR(10),
     cantidad_usada INT NOT NULL,
-    PRIMARY KEY (no_solucion, no_material),
-    FOREIGN KEY (no_solucion) REFERENCES solucion(no_solucion),
-    FOREIGN KEY (no_material) REFERENCES material(no_material)
+    PRIMARY KEY (numero_solucion, codigo_material),
+    FOREIGN KEY (numero_solucion) REFERENCES solucion(numero_solucion),
+    FOREIGN KEY (codigo_material) REFERENCES material(codigo_material)
 );

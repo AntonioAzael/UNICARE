@@ -13,10 +13,10 @@ def listar_usuarios():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT num_usuario, tipo_usuario, correo,
+            SELECT numero_cuenta, tipo_usuario, correo,
                    CONCAT_WS(' ', nombre, primer_apellido, segundo_apellido) AS nombre_completo
             FROM usuario
-            ORDER BY num_usuario
+            ORDER BY numero_cuenta
             """
         )
         filas = cursor.fetchall()
@@ -43,9 +43,9 @@ def registrar_usuario(tipo_usuario, correo, contrasena, nombre, primer_apellido,
             (tipo_usuario, correo_limpio, contrasena.strip(), nombre.strip(), primer_apellido.strip(), seg),
         )
         cnx.commit()
-        nuevo_id = cursor.lastrowid
+        nuevo_numero = cursor.lastrowid
         cursor.close()
-        return nuevo_id
+        return nuevo_numero
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_DUP_ENTRY:
             raise ValueError("Ese correo ya se encuentra registrado en el sistema.")
@@ -68,7 +68,7 @@ def listar_catalogos_solicitud():
             """
             SELECT e.codigo_inventario, e.nombre_equipo, ed.nombre_edificio, e.piso, e.salon, e.area
             FROM equipo_instalacion e
-            INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
             ORDER BY ed.nombre_edificio, e.salon
             """
         )
@@ -92,7 +92,7 @@ def _siguiente_folio(cursor, anio):
     return f"{prefijo}{numero:04d}"
 
 
-def registrar_solicitud(num_usuario, codigo_inventario, nombre_categoria, nombre_prioridad, descripcion_reporte, observaciones=None):
+def registrar_solicitud(numero_cuenta, codigo_inventario, nombre_categoria, nombre_prioridad, descripcion_reporte, observaciones=None):
     descripcion = descripcion_reporte.strip()
     if not descripcion:
         raise ValueError("La descripcion del problema no puede ir vacia.")
@@ -109,10 +109,10 @@ def registrar_solicitud(num_usuario, codigo_inventario, nombre_categoria, nombre
             """
             INSERT INTO reporte (
                 folio, descripcion_reporte, observaciones, fecha_registro,
-                num_usuario, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
+                numero_cuenta, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
             ) VALUES (%s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s)
             """,
-            (folio, descripcion, obs, fecha, num_usuario, nombre_categoria, nombre_prioridad, codigo_inventario),
+            (folio, descripcion, obs, fecha, numero_cuenta, nombre_categoria, nombre_prioridad, codigo_inventario),
         )
         cursor.execute(
             "UPDATE equipo_instalacion SET necesita_reparacion = 1 WHERE codigo_inventario = %s",
@@ -128,15 +128,15 @@ def registrar_solicitud(num_usuario, codigo_inventario, nombre_categoria, nombre
         cnx.close()
 
 
-def listar_fechas_solicitudes(num_usuario=None):
+def listar_fechas_solicitudes(numero_cuenta=None):
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
         sql = "SELECT fecha_registro, COUNT(*) AS total FROM reporte"
         params = []
-        if num_usuario is not None:
-            sql += " WHERE num_usuario = %s"
-            params.append(num_usuario)
+        if numero_cuenta is not None:
+            sql += " WHERE numero_cuenta = %s"
+            params.append(numero_cuenta)
         sql += " GROUP BY fecha_registro ORDER BY fecha_registro DESC"
         cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
@@ -146,7 +146,7 @@ def listar_fechas_solicitudes(num_usuario=None):
         cnx.close()
 
 
-def consultar_solicitudes_por_fecha(fecha_consulta, num_usuario=None):
+def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
     # Consulta 1: Solicitudes de mantenimiento registradas para equipos en una fecha determinada
     cnx = conectar()
     try:
@@ -163,17 +163,17 @@ def consultar_solicitudes_por_fecha(fecha_consulta, num_usuario=None):
                 es.descripcion_estado,
                 r.observaciones
             FROM reporte r
-            INNER JOIN usuario u ON u.num_usuario = r.num_usuario
+            INNER JOIN usuario u ON u.numero_cuenta = r.numero_cuenta
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
             INNER JOIN categoria c ON c.nombre_categoria = r.nombre_categoria
             INNER JOIN estado es ON es.nombre_estado = r.nombre_estado
             WHERE r.fecha_registro = %s
         """
         params = [fecha_consulta]
-        if num_usuario is not None:
-            sql += " AND r.num_usuario = %s"
-            params.append(num_usuario)
+        if numero_cuenta is not None:
+            sql += " AND r.numero_cuenta = %s"
+            params.append(numero_cuenta)
         sql += " ORDER BY r.folio"
         cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()

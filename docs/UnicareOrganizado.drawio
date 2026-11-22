@@ -14,7 +14,7 @@
         <mxCell id="tbl_solucion_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_solucion_row1_val" value="no_solucion" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row1">
+        <mxCell id="tbl_solucion_row1_val" value="numero_solucion" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_solucion_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_solucion">
@@ -59,7 +59,7 @@
         <mxCell id="tbl_solucion_row6_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row6">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_solucion_row6_val" value="num_usuario" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row6">
+        <mxCell id="tbl_solucion_row6_val" value="numero_cuenta" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_solucion_row6">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_usuario" value="USUARIO" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
@@ -71,7 +71,7 @@
         <mxCell id="tbl_usuario_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_usuario_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_usuario_row1_val" value="num_usuario" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_usuario_row1">
+        <mxCell id="tbl_usuario_row1_val" value="numero_cuenta" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_usuario_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_usuario_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_usuario">
@@ -164,7 +164,7 @@
         <mxCell id="tbl_reporte_row4_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row4">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_reporte_row4_val" value="num_usuario" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row4">
+        <mxCell id="tbl_reporte_row4_val" value="numero_cuenta" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row4">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_reporte_row5" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_reporte">
@@ -173,7 +173,7 @@
         <mxCell id="tbl_reporte_row5_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row5">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_reporte_row5_val" value="id_trabajador" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row5">
+        <mxCell id="tbl_reporte_row5_val" value="numero_empleado" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_reporte_row5">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_reporte_row6" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_reporte">
@@ -239,7 +239,7 @@
         <mxCell id="tbl_utiliza_row2_key" value="PK,FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_utiliza_row2">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_utiliza_row2_val" value="no_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_utiliza_row2">
+        <mxCell id="tbl_utiliza_row2_val" value="codigo_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_utiliza_row2">
           <mxGeometry x="62" width="228" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_utiliza_row3" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_utiliza">
@@ -260,7 +260,7 @@
         <mxCell id="tbl_material_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_material_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_material_row1_val" value="no_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_material_row1">
+        <mxCell id="tbl_material_row1_val" value="codigo_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_material_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_material_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_material">
@@ -317,7 +317,7 @@
         <mxCell id="tbl_requiere_row2_key" value="PK,FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_requiere_row2">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_requiere_row2_val" value="no_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_requiere_row2">
+        <mxCell id="tbl_requiere_row2_val" value="codigo_material" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_requiere_row2">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_equipo" value="EQUIPO_INSTALACION" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
@@ -392,7 +392,7 @@
         <mxCell id="tbl_equipo_row8_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_equipo_row8">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_equipo_row8_val" value="no_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_equipo_row8">
+        <mxCell id="tbl_equipo_row8_val" value="clave_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_equipo_row8">
           <mxGeometry x="62" width="248" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_edificio" value="EDIFICIO" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
@@ -404,7 +404,7 @@
         <mxCell id="tbl_edificio_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_edificio_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_edificio_row1_val" value="no_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_edificio_row1">
+        <mxCell id="tbl_edificio_row1_val" value="clave_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_edificio_row1">
           <mxGeometry x="62" width="208" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_edificio_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_edificio">
@@ -497,7 +497,7 @@
         <mxCell id="tbl_trab_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_trab_row1_val" value="id_trabajador" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row1">
+        <mxCell id="tbl_trab_row1_val" value="numero_empleado" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_trab_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_trab">
@@ -524,7 +524,7 @@
         <mxCell id="tbl_trab_row4_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row4">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_trab_row4_val" value="id_supervisor" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row4">
+        <mxCell id="tbl_trab_row4_val" value="empleado_supervisor" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_trab_row4">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_trab_row5" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_trab">
@@ -599,7 +599,7 @@
         <mxCell id="tbl_participa_row2_key" value="PK,FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_participa_row2">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_participa_row2_val" value="id_trabajador" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_participa_row2">
+        <mxCell id="tbl_participa_row2_val" value="numero_empleado" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_participa_row2">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_mant" value="MANTENIMIENTO" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
@@ -647,7 +647,7 @@
         <mxCell id="tbl_mant_row5_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_mant_row5">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_mant_row5_val" value="id_tipo_mantenimiento" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_mant_row5">
+        <mxCell id="tbl_mant_row5_val" value="codigo_tipo" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_mant_row5">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_recibe" value="RECIBE_MANTENIMIENTO" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;fillColor=#F8CECC;strokeColor=#B85450;fontColor=#000000;fontSize=12;" vertex="1" parent="1">
@@ -680,7 +680,7 @@
         <mxCell id="tbl_hist_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_hist_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_hist_row1_val" value="no_historial" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_hist_row1">
+        <mxCell id="tbl_hist_row1_val" value="consecutivo_historial" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_hist_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_hist_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_hist">
@@ -746,7 +746,7 @@
         <mxCell id="tbl_tipo_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_tipo_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_tipo_row1_val" value="id_tipo_mantenimiento" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_tipo_row1">
+        <mxCell id="tbl_tipo_row1_val" value="codigo_tipo" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_tipo_row1">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_tipo_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_tipo">
@@ -815,7 +815,7 @@
         <mxCell id="tbl_orden_row3_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_orden_row3">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_orden_row3_val" value="id_tipo_mantenimiento" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_orden_row3">
+        <mxCell id="tbl_orden_row3_val" value="codigo_tipo" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_orden_row3">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_orden_row4" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_orden">
@@ -956,7 +956,7 @@
         <mxCell id="tbl_asignacion_row2_key" value="PK,FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_asignacion_row2">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_asignacion_row2_val" value="id_trabajador" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_asignacion_row2">
+        <mxCell id="tbl_asignacion_row2_val" value="numero_empleado" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_asignacion_row2">
           <mxGeometry x="62" width="238" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_asignacion_row3" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_asignacion">
@@ -995,7 +995,7 @@
         <mxCell id="tbl_plan_row1_key" value="PK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row1">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_plan_row1_val" value="num_plan" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row1">
+        <mxCell id="tbl_plan_row1_val" value="clave_plan" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=5;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row1">
           <mxGeometry x="62" width="248" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_plan_row2" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_plan">
@@ -1013,7 +1013,7 @@
         <mxCell id="tbl_plan_row3_key" value="FK" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;fontStyle=1;fontSize=11;align=center;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row3">
           <mxGeometry width="62" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="tbl_plan_row3_val" value="no_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row3">
+        <mxCell id="tbl_plan_row3_val" value="clave_edificio" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;fontStyle=0;fontSize=11;fontColor=#000000;overflow=hidden;" vertex="1" parent="tbl_plan_row3">
           <mxGeometry x="62" width="248" height="26" as="geometry" />
         </mxCell>
         <mxCell id="tbl_plan_row4" value="" style="shape=partialRectangle;collapsible=0;dropTarget=0;pointerEvents=0;fillColor=none;top=0;left=0;bottom=0;right=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;strokeColor=#B85450;" vertex="1" parent="tbl_plan">

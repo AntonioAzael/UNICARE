@@ -13,7 +13,7 @@ def listar_solicitudes_disponibles():
             SELECT r.folio, r.fecha_registro, r.nombre_estado, e.nombre_equipo, ed.nombre_edificio, r.descripcion_reporte
             FROM reporte r
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
             WHERE r.nombre_estado NOT IN ('Solucionado', 'Cancelado')
               -- Oculta los reportes que ya tienen una orden de trabajo vigente (no cancelada)
               AND NOT EXISTS (
@@ -34,7 +34,7 @@ def listar_tipos_mantenimiento():
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        cursor.execute("SELECT id_tipo_mantenimiento, nombre_tipo, descripcion_tipo FROM tipo_mantenimiento")
+        cursor.execute("SELECT codigo_tipo, nombre_tipo, descripcion_tipo FROM tipo_mantenimiento")
         tipos = cursor.fetchall()
         cursor.close()
         return tipos
@@ -53,7 +53,7 @@ def listar_ordenes():
             FROM mantenimiento m
             INNER JOIN reporte r ON r.folio = m.folio
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
             ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC
             """
         )
@@ -70,11 +70,11 @@ def listar_tecnicos():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT id_trabajador,
+            SELECT numero_empleado,
                    CONCAT_WS(' ', nombre, primer_apellido, segundo_apellido) AS nombre_completo,
                    especialidad
             FROM trabajador_mantenimiento
-            ORDER BY id_trabajador
+            ORDER BY numero_empleado
             """
         )
         filas = cursor.fetchall()
@@ -99,7 +99,7 @@ def _siguiente_clave(cursor, anio):
 
 def registrar_orden_trabajo(
     folio,
-    id_tipo_mantenimiento,
+    codigo_tipo,
     fecha_programada,
     descripcion_trabajo,
     observaciones=None,
@@ -133,11 +133,11 @@ def registrar_orden_trabajo(
             INSERT INTO mantenimiento (
                 clave_mantenimiento, fecha_creacion, fecha_programada, fecha_inicio, fecha_fin,
                 descripcion_trabajo, observaciones, costo_mano_obra, costo_materiales,
-                id_tipo_mantenimiento, folio, nombre_estado
+                codigo_tipo, folio, nombre_estado
             ) VALUES (%s, %s, %s, NULL, NULL, %s, %s, %s, %s, %s, %s, 'Pendiente')
             """,
             (clave, hoy, fecha_programada, descripcion, obs, costo_mano_obra, costo_materiales,
-             id_tipo_mantenimiento, folio),
+             codigo_tipo, folio),
         )
         cursor.execute(
             "UPDATE reporte SET nombre_estado = 'En revision' WHERE folio = %s AND nombre_estado = 'Pendiente'",
@@ -165,26 +165,26 @@ def asignar_tecnicos_orden(clave_mantenimiento, asignaciones):
         cursor = cnx.cursor(dictionary=True)
         for item in asignaciones:
             cursor.execute(
-                "SELECT 1 FROM mantenimiento_trabajador WHERE clave_mantenimiento = %s AND id_trabajador = %s",
-                (clave_mantenimiento, item["id_trabajador"]),
+                "SELECT 1 FROM mantenimiento_trabajador WHERE clave_mantenimiento = %s AND numero_empleado = %s",
+                (clave_mantenimiento, item["numero_empleado"]),
             )
             if cursor.fetchone():
                 cursor.execute(
                     """
                     UPDATE mantenimiento_trabajador
                     SET fecha_asignacion = %s, horas_asignadas = %s, actividad_asignada = %s
-                    WHERE clave_mantenimiento = %s AND id_trabajador = %s
+                    WHERE clave_mantenimiento = %s AND numero_empleado = %s
                     """,
-                    (hoy, item["horas"], item["actividad"], clave_mantenimiento, item["id_trabajador"]),
+                    (hoy, item["horas"], item["actividad"], clave_mantenimiento, item["numero_empleado"]),
                 )
             else:
                 cursor.execute(
                     """
                     INSERT INTO mantenimiento_trabajador
-                        (clave_mantenimiento, id_trabajador, fecha_asignacion, horas_asignadas, actividad_asignada)
+                        (clave_mantenimiento, numero_empleado, fecha_asignacion, horas_asignadas, actividad_asignada)
                     VALUES (%s, %s, %s, %s, %s)
                     """,
-                    (clave_mantenimiento, item["id_trabajador"], hoy, item["horas"], item["actividad"]),
+                    (clave_mantenimiento, item["numero_empleado"], hoy, item["horas"], item["actividad"]),
                 )
         cursor.execute(
             "UPDATE mantenimiento SET nombre_estado = 'En proceso', fecha_inicio = COALESCE(fecha_inicio, %s) "
@@ -258,7 +258,7 @@ def consultar_actividades_orden(clave_mantenimiento=None):
         if clave_mantenimiento:
             sql += " WHERE clave_mantenimiento = %s"
             params.append(clave_mantenimiento)
-        sql += " ORDER BY clave_mantenimiento, fecha_historial, no_historial"
+        sql += " ORDER BY clave_mantenimiento, fecha_historial, consecutivo_historial"
         cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
@@ -267,7 +267,7 @@ def consultar_actividades_orden(clave_mantenimiento=None):
         cnx.close()
 
 
-def consultar_ordenes_edificio(no_edificio=None):
+def consultar_ordenes_edificio(clave_edificio=None):
     # Consulta 3: Informacion de una orden de trabajo para una solicitud de mantenimiento a un edificio
     cnx = conectar()
     try:
@@ -290,14 +290,14 @@ def consultar_ordenes_edificio(no_edificio=None):
             FROM mantenimiento m
             INNER JOIN reporte r ON r.folio = m.folio
             INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.no_edificio = e.no_edificio
-            INNER JOIN tipo_mantenimiento tm ON tm.id_tipo_mantenimiento = m.id_tipo_mantenimiento
+            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
+            INNER JOIN tipo_mantenimiento tm ON tm.codigo_tipo = m.codigo_tipo
             INNER JOIN estado es ON es.nombre_estado = m.nombre_estado
         """
         params = []
-        if no_edificio:
-            sql += " WHERE ed.no_edificio = %s"
-            params.append(no_edificio)
+        if clave_edificio:
+            sql += " WHERE ed.clave_edificio = %s"
+            params.append(clave_edificio)
         sql += " ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC"
         cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
@@ -320,13 +320,13 @@ def consultar_tecnicos_orden(clave_mantenimiento=None):
                 mt.horas_asignadas,
                 mt.actividad_asignada
             FROM mantenimiento_trabajador mt
-            INNER JOIN trabajador_mantenimiento t ON t.id_trabajador = mt.id_trabajador
+            INNER JOIN trabajador_mantenimiento t ON t.numero_empleado = mt.numero_empleado
         """
         params = []
         if clave_mantenimiento:
             sql += " WHERE mt.clave_mantenimiento = %s"
             params.append(clave_mantenimiento)
-        sql += " ORDER BY mt.clave_mantenimiento, mt.fecha_asignacion, t.id_trabajador"
+        sql += " ORDER BY mt.clave_mantenimiento, mt.fecha_asignacion, t.numero_empleado"
         cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
