@@ -23,6 +23,8 @@ Aplicacion de consola desarrollada en **Python** y conectada a **MySQL / MariaDB
 - `sql/01_tablas_mantenimiento.sql`: creacion de la base de datos `sistema_reportes_mantenimiento` y sus 16 tablas (14 entidades del DER + 2 tablas de relaciones M:M) con llaves primarias y foraneas.
 - `sql/02_catalogo_mantenimiento.sql`: carga inicial de catalogos y registros de ejemplo dentro de una transaccion.
 - `assets/`: archivos graficos originales del logo (`Logo.ai` y `logo_unicare.png`).
+- `docs/`: diagramas DER y MR (`UniCare_DER_MR_14_entidades.drawio`) y la documentacion vigente del proyecto en Word: `Sistema De Reportes Y Mantenimiento - UNICARE.docx`, `Manual tecnico - UNICARE.docx` y `Manual de usuario - UNICARE.docx`.
+- `docs/`: diagramas DER y MR (`UniCare_DER_MR_14_entidades.drawio`) y la documentacion vigente en Word: documento principal del proyecto, manual de usuario y manual tecnico.
 
 ## Modelo de datos (DER / MR)
 

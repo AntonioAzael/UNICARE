@@ -3,3 +3,7 @@ __pycache__/
 *.pyo
 .env
 .vscode/
+
+# Temporales de draw.io y salidas generadas
+*.dtmp
+Claude outputs/

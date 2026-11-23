@@ -921,12 +921,12 @@ def mostrar_tecnicos(sesion):
     tecnicos = listar_tecnicos_gestion()
     print()
     imprimir_tabla(
-        ["Id", "Tecnico", "Especialidad", "Supervisor", "Trabajos"],
+        ["Num. empleado", "Tecnico", "Especialidad", "Supervisor", "Trabajos"],
         [
             [t["numero_empleado"], t["nombre_completo"], t["especialidad"], t["nombre_supervisor"] or "Ninguno", t["asignaciones"]]
             for t in tecnicos
         ],
-        [4, 26, 22, 14, 8],
+        [8, 26, 22, 14, 8],
     )
 
 
