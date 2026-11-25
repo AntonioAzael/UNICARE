@@ -5,14 +5,14 @@ Aplicacion de consola desarrollada en **Python** y conectada a **MySQL / MariaDB
 ## Tecnologias y librerias utilizadas
 
 - **Python 3.11**: lenguaje principal del sistema en consola.
-- **Python vanilla**: toda la interfaz de consola usa solo la libreria estandar (`print`, `input`, `getpass`, `textwrap`), con menus, tablas y fichas hechos con texto.
+- **rich**: libreria para la interfaz de consola con colores. Se usa `Console` (un solo objeto para limpiar la pantalla e imprimir), `Table` (tablas de consultas con bordes redondeados), `Panel` (logo, menus y fichas de solicitudes, ordenes y soluciones) y `Prompt`, `IntPrompt`, `FloatPrompt` y `Confirm` (captura de datos, contrasenas ocultas y confirmaciones s/n).
 - **MySQL Connector/Python (`mysql-connector-python`)**: controlador oficial para conectar Python con la base de datos de XAMPP usando el patron de conexion y manejo de errores (`errorcode`) de la guia oficial de MySQL Connector/Python 5.1.
 - **XAMPP (MySQL / phpMyAdmin)**: motor de base de datos local donde se almacenan todas las tablas y registros.
 
 ## Estructura del proyecto
 
 - `main.py`: control de acceso (login, auto-registro de estudiante y alta de personal por supervisor), limpieza de pantalla con encabezado fijo, menus segun el rol del usuario y las funciones de captura/impresion en consola.
-- `logo.py`: header del sistema donde se imprime el logo ASCII de **UNICARE** junto al titulo y subtitulo.
+- `logo.py`: header del sistema donde se imprime en un `Panel` de rich el logo ASCII de **UNICARE** junto al titulo, el subtitulo y la universidad (version completa en consolas de 140 columnas o mas y version ajustada en las demas).
 - `conexion.py`: conexion a MySQL en XAMPP e inicializacion automatica de las tablas y catalogos si la base aun no existe o si viene de una version anterior del esquema.
 - `funciones/auth.py`: inicio de sesion, alta de personal y baja de tecnicos (solo supervisores; no se elimina a quien tenga trabajos asignados).
 - `funciones/solicitudes.py`: listas de pisos y areas de Docencia 1, catalogo de categorias, registro de solicitudes y las consultas de solicitudes por fecha, seguimiento por folio, reportes por estado y reportes por piso y area.
