@@ -23,6 +23,13 @@ from funciones.materiales import (
     registrar_material_tomado,
 )
 from funciones.ordenes import (
+    MAX_CODIGO_TIPO,
+    MAX_DESCRIPCION_TIPO,
+    MAX_NOMBRE_TIPO,
+    eliminar_tipo_mantenimiento,
+    existe_tipo,
+    listar_tipos_gestion,
+    registrar_tipo_mantenimiento,
     asignar_tecnicos_orden,
     consultar_actividades_orden,
     consultar_ordenes_edificio,
@@ -63,8 +70,14 @@ from funciones.solicitudes import (
     EJEMPLOS_LUGAR,
     LUGARES_BANO,
     MAX_DESCRIPCION,
+    MAX_DESCRIPCION_CATALOGO,
     MAX_LUGAR,
+    MAX_NOMBRE_CATEGORIA,
     PISOS,
+    eliminar_categoria,
+    existe_categoria,
+    listar_categorias,
+    registrar_categoria,
     consultar_detalle_piso_area,
     consultar_reportes_piso_area,
     consultar_reportes_por_estado,
@@ -1301,7 +1314,7 @@ def pedir_ubicacion_equipo(piso_actual=None, area_actual=None, salon_actual=None
         mensaje(f"El salon o lugar no puede pasar de {MAX_SALON} caracteres.")
 
 
-def pedir_dato_equipo(etiqueta, maximo, actual=None):
+def pedir_dato(etiqueta, maximo, actual=None):
     while True:
         valor = entrada(etiqueta, actual) if actual else pedir_texto(etiqueta)
         if len(valor) <= maximo:
@@ -1328,8 +1341,8 @@ def flujo_registrar_equipo(sesion):
         else:
             break
 
-    nombre = pedir_dato_equipo("Nombre del equipo", MAX_NOMBRE_EQUIPO)
-    tipo = pedir_dato_equipo("Tipo (ej. Equipo de Computo, Climatizacion)", MAX_TIPO_EQUIPO)
+    nombre = pedir_dato("Nombre del equipo", MAX_NOMBRE_EQUIPO)
+    tipo = pedir_dato("Tipo (ej. Equipo de Computo, Climatizacion)", MAX_TIPO_EQUIPO)
     ubicacion = pedir_ubicacion_equipo()
     if not ubicacion:
         return
@@ -1346,8 +1359,8 @@ def flujo_editar_equipo(sesion):
     if not equipo:
         return
     mensaje("\nPresiona Enter para conservar el valor actual.")
-    nombre = pedir_dato_equipo("Nombre del equipo", MAX_NOMBRE_EQUIPO, equipo["nombre_equipo"])
-    tipo = pedir_dato_equipo("Tipo", MAX_TIPO_EQUIPO, equipo["tipo_equipo_instalacion"])
+    nombre = pedir_dato("Nombre del equipo", MAX_NOMBRE_EQUIPO, equipo["nombre_equipo"])
+    tipo = pedir_dato("Tipo", MAX_TIPO_EQUIPO, equipo["tipo_equipo_instalacion"])
 
     piso, area, salon = equipo["piso"], equipo["area"], equipo["salon"]
     if confirmar("Cambiar el piso o el area del equipo?", False):
@@ -1421,6 +1434,170 @@ def menu_equipos(sesion):
             ejecutar_opcion(flujo_editar_equipo, sesion)
         elif op == "4":
             ejecutar_opcion(flujo_eliminar_equipo, sesion)
+        pausar()
+
+
+# ---------------------------------------------------------------------------
+# Gestion de catalogos (solo supervisores): categorias y tipos de mantenimiento.
+# Estados y prioridades son fijos y no se editan desde el sistema.
+# ---------------------------------------------------------------------------
+
+def mostrar_categorias(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Categorias")
+    categorias = listar_categorias()
+    if not categorias:
+        mensaje("No hay categorias registradas.")
+        return
+    print()
+    imprimir_tabla(
+        ["Categoria", "Descripcion", "Reportes"],
+        [[c["nombre_categoria"], c["descripcion_categoria"], c["reportes"]] for c in categorias],
+        [16, 44, 8],
+    )
+
+
+def flujo_registrar_categoria(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar categoria")
+    while True:
+        nombre = pedir_texto("Nombre de la categoria (ej. Plomeria) (0 para cancelar)", permitir_cancelar=True)
+        if not nombre:
+            return
+        if len(nombre) > MAX_NOMBRE_CATEGORIA:
+            mensaje(f"El nombre no puede pasar de {MAX_NOMBRE_CATEGORIA} caracteres.")
+        elif existe_categoria(nombre):
+            mensaje(f"Ya existe la categoria {nombre}. Escribe otra.")
+        else:
+            break
+    descripcion = pedir_dato("Descripcion", MAX_DESCRIPCION_CATALOGO)
+    registrada = registrar_categoria(nombre, descripcion)
+    mensaje(f"\nCategoria {registrada} registrada.")
+
+
+def flujo_eliminar_categoria(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Eliminar categoria")
+    categoria = elegir_de_lista(
+        "Categoria a eliminar",
+        listar_categorias(),
+        lambda c: c["nombre_categoria"] + (f" - usada en {c['reportes']} reporte(s)" if c["reportes"] else ""),
+    )
+    if not categoria:
+        return
+    # Se valida antes de pedir confirmacion; eliminar_categoria vuelve a revisarlo como respaldo
+    if categoria["reportes"]:
+        mensaje(
+            f"\nAviso: la categoria {categoria['nombre_categoria']} se usa en {categoria['reportes']} "
+            "reporte(s) y no puede eliminarse para no perder el historial."
+        )
+        return
+    if not confirmar(f"Confirmas eliminar la categoria {categoria['nombre_categoria']}? No se puede deshacer", False):
+        mensaje("Operacion cancelada.")
+        return
+    eliminar_categoria(categoria["nombre_categoria"])
+    mensaje(f"\nCategoria {categoria['nombre_categoria']} eliminada.")
+
+
+def mostrar_tipos(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Tipos de mantenimiento")
+    tipos = listar_tipos_gestion()
+    if not tipos:
+        mensaje("No hay tipos de mantenimiento registrados.")
+        return
+    print()
+    imprimir_tabla(
+        ["Codigo", "Tipo", "Descripcion", "Ordenes"],
+        [[t["codigo_tipo"], t["nombre_tipo"], t["descripcion_tipo"], t["ordenes"]] for t in tipos],
+        [10, 14, 40, 7],
+    )
+
+
+def flujo_registrar_tipo(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar tipo de mantenimiento")
+    while True:
+        codigo = pedir_texto("Codigo del tipo (ej. PRED) (0 para cancelar)", permitir_cancelar=True)
+        if not codigo:
+            return
+        codigo = codigo.upper()
+        if len(codigo) > MAX_CODIGO_TIPO:
+            mensaje(f"El codigo no puede pasar de {MAX_CODIGO_TIPO} caracteres.")
+        elif existe_tipo(codigo_tipo=codigo):
+            mensaje(f"Ya existe un tipo con el codigo {codigo}. Escribe otro.")
+        else:
+            break
+    while True:
+        nombre = pedir_dato("Nombre del tipo (ej. Predictivo)", MAX_NOMBRE_TIPO)
+        if not existe_tipo(nombre_tipo=nombre):
+            break
+        mensaje(f"Ya existe el tipo {nombre}. Escribe otro.")
+    descripcion = pedir_dato("Descripcion", MAX_DESCRIPCION_TIPO)
+    registrado = registrar_tipo_mantenimiento(codigo, nombre, descripcion)
+    mensaje(f"\nTipo de mantenimiento {nombre} ({registrado}) registrado.")
+
+
+def flujo_eliminar_tipo(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Eliminar tipo de mantenimiento")
+    tipo = elegir_de_lista(
+        "Tipo a eliminar",
+        listar_tipos_gestion(),
+        lambda t: f"{t['codigo_tipo']} | {t['nombre_tipo']}"
+        + (f" - usado en {t['ordenes']} orden(es)" if t["ordenes"] else ""),
+    )
+    if not tipo:
+        return
+    # Se valida antes de pedir confirmacion; eliminar_tipo_mantenimiento vuelve a revisarlo como respaldo
+    if tipo["ordenes"]:
+        mensaje(
+            f"\nAviso: el tipo {tipo['nombre_tipo']} se usa en {tipo['ordenes']} orden(es) de trabajo "
+            "y no puede eliminarse para no perder el historial."
+        )
+        return
+    if not confirmar(f"Confirmas eliminar el tipo {tipo['nombre_tipo']}? No se puede deshacer", False):
+        mensaje("Operacion cancelada.")
+        return
+    nombre = eliminar_tipo_mantenimiento(tipo["codigo_tipo"])
+    mensaje(f"\nTipo de mantenimiento {nombre} eliminado.")
+
+
+def menu_catalogos(sesion):
+    if not sesion.get("es_supervisor"):
+        mensaje("Solo un supervisor puede gestionar los catalogos.")
+        return
+    while True:
+        limpiar_pantalla(sesion)
+        mostrar_menu(
+            "Gestion de catalogos",
+            [
+                ("1", "Ver categorias"),
+                ("2", "Registrar categoria"),
+                ("3", "Eliminar categoria"),
+                ("4", "Ver tipos de mantenimiento"),
+                ("5", "Registrar tipo de mantenimiento"),
+                ("6", "Eliminar tipo de mantenimiento"),
+                ("0", "Regresar"),
+            ],
+        )
+        mensaje("Los estados y las prioridades son fijos y no se editan desde el sistema.")
+        linea("-")
+        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6"])
+        if op == "0":
+            break
+        if op == "1":
+            ejecutar_opcion(mostrar_categorias, sesion)
+        elif op == "2":
+            ejecutar_opcion(flujo_registrar_categoria, sesion)
+        elif op == "3":
+            ejecutar_opcion(flujo_eliminar_categoria, sesion)
+        elif op == "4":
+            ejecutar_opcion(mostrar_tipos, sesion)
+        elif op == "5":
+            ejecutar_opcion(flujo_registrar_tipo, sesion)
+        elif op == "6":
+            ejecutar_opcion(flujo_eliminar_tipo, sesion)
         pausar()
 
 
@@ -1516,10 +1693,11 @@ def menu_mantenimiento(sesion):
             ("7", "Consultas del sistema"),
             ("8", "Gestion de personal (registro y baja de tecnicos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
             ("9", "Gestion de equipos (altas, cambios y bajas)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
+            ("10", "Gestion de catalogos (categorias y tipos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
             ("0", "Cerrar sesion"),
         ]
         mostrar_menu("Menu mantenimiento", opciones)
-        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
+        op = pedir_opcion([str(n) for n in range(11)])
         if op == "0":
             break
         if op == "6":
@@ -1535,6 +1713,11 @@ def menu_mantenimiento(sesion):
             continue
         if op == "9":
             menu_equipos(sesion)
+            if not sesion.get("es_supervisor"):
+                pausar()
+            continue
+        if op == "10":
+            menu_catalogos(sesion)
             if not sesion.get("es_supervisor"):
                 pausar()
             continue

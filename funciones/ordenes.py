@@ -47,6 +47,118 @@ def listar_tipos_mantenimiento():
         cnx.close()
 
 
+# ---------------------------------------------------------------------------
+# Gestion del catalogo de tipos de mantenimiento (solo supervisores)
+# ---------------------------------------------------------------------------
+
+MAX_CODIGO_TIPO = 10
+MAX_NOMBRE_TIPO = 30
+MAX_DESCRIPCION_TIPO = 150
+
+
+def listar_tipos_gestion():
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT tm.codigo_tipo, tm.nombre_tipo, tm.descripcion_tipo, COUNT(m.clave_mantenimiento) AS ordenes
+            FROM tipo_mantenimiento tm
+            LEFT JOIN mantenimiento m ON m.codigo_tipo = tm.codigo_tipo
+            GROUP BY tm.codigo_tipo, tm.nombre_tipo, tm.descripcion_tipo
+            ORDER BY tm.nombre_tipo
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def existe_tipo(codigo_tipo=None, nombre_tipo=None):
+    # Revisa si ya hay un tipo con ese codigo o con ese nombre
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor()
+        if codigo_tipo is not None:
+            cursor.execute("SELECT 1 FROM tipo_mantenimiento WHERE codigo_tipo = %s", (codigo_tipo.strip().upper(),))
+        else:
+            cursor.execute("SELECT 1 FROM tipo_mantenimiento WHERE nombre_tipo = %s", (nombre_tipo.strip(),))
+        existe = cursor.fetchone() is not None
+        cursor.close()
+        return existe
+    finally:
+        cnx.close()
+
+
+def registrar_tipo_mantenimiento(codigo_tipo, nombre_tipo, descripcion_tipo):
+    codigo = codigo_tipo.strip().upper()
+    nombre = nombre_tipo.strip()
+    descripcion = descripcion_tipo.strip()
+    if not codigo or not nombre or not descripcion:
+        raise ValueError("El codigo, el nombre y la descripcion del tipo son obligatorios.")
+    if len(codigo) > MAX_CODIGO_TIPO:
+        raise ValueError(f"El codigo no puede pasar de {MAX_CODIGO_TIPO} caracteres.")
+    if len(nombre) > MAX_NOMBRE_TIPO:
+        raise ValueError(f"El nombre no puede pasar de {MAX_NOMBRE_TIPO} caracteres.")
+    if len(descripcion) > MAX_DESCRIPCION_TIPO:
+        raise ValueError(f"La descripcion no puede pasar de {MAX_DESCRIPCION_TIPO} caracteres.")
+
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor()
+        cursor.execute("SELECT 1 FROM tipo_mantenimiento WHERE codigo_tipo = %s", (codigo,))
+        if cursor.fetchone():
+            raise ValueError(f"Ya existe un tipo de mantenimiento con el codigo {codigo}.")
+        cursor.execute("SELECT 1 FROM tipo_mantenimiento WHERE nombre_tipo = %s", (nombre,))
+        if cursor.fetchone():
+            raise ValueError(f"Ya existe el tipo de mantenimiento {nombre}.")
+        cursor.execute(
+            "INSERT INTO tipo_mantenimiento (codigo_tipo, nombre_tipo, descripcion_tipo) VALUES (%s, %s, %s)",
+            (codigo, nombre, descripcion),
+        )
+        cnx.commit()
+        cursor.close()
+        return codigo
+    except Exception:
+        cnx.rollback()
+        raise
+    finally:
+        cnx.close()
+
+
+def eliminar_tipo_mantenimiento(codigo_tipo):
+    # Baja de un tipo. Si alguna orden de trabajo lo usa no se borra para conservar el historial.
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor()
+        cursor.execute("SELECT nombre_tipo FROM tipo_mantenimiento WHERE codigo_tipo = %s", (codigo_tipo,))
+        tipo = cursor.fetchone()
+        if not tipo:
+            raise ValueError("El tipo de mantenimiento ya no existe.")
+        cursor.execute(
+            "SELECT clave_mantenimiento FROM mantenimiento WHERE codigo_tipo = %s ORDER BY clave_mantenimiento",
+            (codigo_tipo,),
+        )
+        claves = [fila[0] for fila in cursor.fetchall()]
+        if claves:
+            raise ValueError(
+                f"El tipo {tipo[0]} se usa en las ordenes {', '.join(claves)} y no puede eliminarse."
+            )
+        cursor.execute("DELETE FROM tipo_mantenimiento WHERE codigo_tipo = %s", (codigo_tipo,))
+        cnx.commit()
+        cursor.close()
+        return tipo[0]
+    except Exception:
+        cnx.rollback()
+        raise
+    finally:
+        cnx.close()
+
+
 def listar_ordenes():
     cnx = conectar()
     try:

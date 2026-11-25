@@ -15,8 +15,8 @@ Aplicacion de consola desarrollada en **Python** y conectada a **MySQL / MariaDB
 - `logo.py`: header del sistema donde se imprime el logo ASCII de **UNICARE** junto al titulo y subtitulo.
 - `conexion.py`: conexion a MySQL en XAMPP e inicializacion automatica de las tablas y catalogos si la base aun no existe o si viene de una version anterior del esquema.
 - `funciones/auth.py`: inicio de sesion, alta de personal y baja de tecnicos (solo supervisores; no se elimina a quien tenga trabajos asignados).
-- `funciones/solicitudes.py`: listas de pisos y areas de Docencia 1, registro de solicitudes y las consultas de solicitudes por fecha, seguimiento por folio, reportes por estado y reportes por piso y area.
-- `funciones/ordenes.py`: registro de ordenes de trabajo (con la clasificacion de la solicitud), asignacion de tecnicos, registro de actividades especificas y consultas relacionadas.
+- `funciones/solicitudes.py`: listas de pisos y areas de Docencia 1, catalogo de categorias, registro de solicitudes y las consultas de solicitudes por fecha, seguimiento por folio, reportes por estado y reportes por piso y area.
+- `funciones/ordenes.py`: catalogo de tipos de mantenimiento, registro de ordenes de trabajo (con la clasificacion de la solicitud), asignacion de tecnicos, registro de actividades especificas y consultas relacionadas.
 - `funciones/soluciones.py`: registro de la solucion de un reporte con los materiales utilizados (descuenta existencia) y consulta de soluciones.
 - `funciones/materiales.py`: inventario, alta y baja de materiales, reabastecimiento, registro de material tomado (descuenta solo la cantidad indicada) y consulta de materiales por reponer.
 - `funciones/planes.py`: registro y consulta de planes de mantenimiento preventivo por edificio y equipo, y gestion de equipos (alta, edicion y baja).
@@ -74,6 +74,7 @@ La solicitud se guarda en estado *Pendiente* y el sistema muestra el folio gener
 ### Gestion (solo supervisores)
 - **Gestion de personal**: registro de docentes, administrativos y tecnicos, y baja de tecnicos.
 - **Gestion de equipos**: ver equipos, registrar un equipo con su codigo de inventario (siempre en Docencia 1, con piso y area de las mismas listas del registro de solicitudes), editar sus datos o ubicacion y eliminarlo solo si no aparece en ningun reporte ni plan.
+- **Gestion de catalogos**: ver, registrar y eliminar categorias y tipos de mantenimiento. No se elimina una categoria que use algun reporte ni un tipo que use alguna orden de trabajo. Los estados y las prioridades son fijos y no se editan desde el sistema.
 
 ## Como ejecutarlo
 

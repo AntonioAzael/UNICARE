@@ -103,6 +103,106 @@ def listar_catalogos_solicitud():
         cnx.close()
 
 
+# ---------------------------------------------------------------------------
+# Gestion del catalogo de categorias (solo supervisores)
+# ---------------------------------------------------------------------------
+
+MAX_NOMBRE_CATEGORIA = 25
+MAX_DESCRIPCION_CATALOGO = 150
+
+
+def listar_categorias():
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT c.nombre_categoria, c.descripcion_categoria, COUNT(r.folio) AS reportes
+            FROM categoria c
+            LEFT JOIN reporte r ON r.nombre_categoria = c.nombre_categoria
+            GROUP BY c.nombre_categoria, c.descripcion_categoria
+            ORDER BY c.nombre_categoria
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def existe_categoria(nombre_categoria):
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor()
+        cursor.execute("SELECT 1 FROM categoria WHERE nombre_categoria = %s", (nombre_categoria.strip(),))
+        existe = cursor.fetchone() is not None
+        cursor.close()
+        return existe
+    finally:
+        cnx.close()
+
+
+def registrar_categoria(nombre_categoria, descripcion_categoria):
+    nombre = nombre_categoria.strip()
+    descripcion = descripcion_categoria.strip()
+    if not nombre or not descripcion:
+        raise ValueError("El nombre y la descripcion de la categoria son obligatorios.")
+    if len(nombre) > MAX_NOMBRE_CATEGORIA:
+        raise ValueError(f"El nombre no puede pasar de {MAX_NOMBRE_CATEGORIA} caracteres.")
+    if len(descripcion) > MAX_DESCRIPCION_CATALOGO:
+        raise ValueError(f"La descripcion no puede pasar de {MAX_DESCRIPCION_CATALOGO} caracteres.")
+
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor()
+        # La comparacion no distingue mayusculas (collation utf8mb4_unicode_ci)
+        cursor.execute("SELECT 1 FROM categoria WHERE nombre_categoria = %s", (nombre,))
+        if cursor.fetchone():
+            raise ValueError(f"Ya existe la categoria {nombre}.")
+        cursor.execute(
+            "INSERT INTO categoria (nombre_categoria, descripcion_categoria) VALUES (%s, %s)",
+            (nombre, descripcion),
+        )
+        cnx.commit()
+        cursor.close()
+        return nombre
+    except Exception:
+        cnx.rollback()
+        raise
+    finally:
+        cnx.close()
+
+
+def eliminar_categoria(nombre_categoria):
+    # Baja de una categoria. Si algun reporte la usa no se borra para conservar el historial.
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor()
+        cursor.execute("SELECT 1 FROM categoria WHERE nombre_categoria = %s", (nombre_categoria,))
+        if not cursor.fetchone():
+            raise ValueError("La categoria ya no existe.")
+        cursor.execute(
+            "SELECT folio FROM reporte WHERE nombre_categoria = %s ORDER BY folio",
+            (nombre_categoria,),
+        )
+        folios = [fila[0] for fila in cursor.fetchall()]
+        if folios:
+            raise ValueError(
+                f"La categoria {nombre_categoria} se usa en los reportes {', '.join(folios)} y no puede eliminarse."
+            )
+        cursor.execute("DELETE FROM categoria WHERE nombre_categoria = %s", (nombre_categoria,))
+        cnx.commit()
+        cursor.close()
+    except Exception:
+        cnx.rollback()
+        raise
+    finally:
+        cnx.close()
+
+
 def _siguiente_folio(cursor, anio):
     prefijo = f"REP-{anio}-"
     cursor.execute(
