@@ -35,10 +35,20 @@ from funciones.ordenes import (
     registrar_orden_trabajo,
 )
 from funciones.planes import (
+    MAX_CODIGO_EQUIPO,
+    MAX_NOMBRE_EQUIPO,
+    MAX_SALON,
+    MAX_TIPO_EQUIPO,
     consultar_planes_edificio,
+    editar_equipo,
+    eliminar_equipo,
+    existe_equipo,
     listar_edificios,
+    listar_equipos,
     listar_equipos_por_edificio,
+    registrar_equipo,
     registrar_plan_preventivo,
+    usos_equipo,
 )
 from funciones.soluciones import (
     consultar_soluciones,
@@ -1004,15 +1014,15 @@ def mostrar_consulta_piso_area(sesion):
 
     print()
     imprimir_tabla(
-        ["Piso", "Area", "Pendiente", "En revision", "En proceso", "Solucionado", "Total"],
+        ["Piso", "Area", "Pendiente", "En revision", "En proceso", "Solucionado", "Cancelado", "Total"],
         [
             [
                 f["piso"], f["area"], f["pendiente"], f["en_revision"],
-                f["en_proceso"], f["solucionado"], f["total"],
+                f["en_proceso"], f["solucionado"], f["cancelado"], f["total"],
             ]
             for f in filas
         ],
-        [11, 18, 9, 11, 10, 11, 5],
+        [11, 18, 9, 11, 10, 11, 9, 5],
     )
 
     if not confirmar("\nVer el detalle de un piso y area?", False):
@@ -1243,6 +1253,178 @@ def menu_personal(sesion):
 
 
 # ---------------------------------------------------------------------------
+# Gestion de equipos (solo supervisores)
+# ---------------------------------------------------------------------------
+
+def formato_equipo(e):
+    return f"{e['codigo_inventario']} | {e['nombre_equipo']} ({e['piso']}, {e['area']}, {e['salon']})"
+
+
+def mostrar_equipos(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Equipos de Docencia 1")
+    equipos = listar_equipos()
+    if not equipos:
+        mensaje("No hay equipos registrados.")
+        return
+    print()
+    imprimir_tabla(
+        ["Codigo", "Nombre", "Tipo", "Piso", "Area", "Salon", "Reparar"],
+        [
+            [
+                e["codigo_inventario"], e["nombre_equipo"], e["tipo_equipo_instalacion"], e["piso"],
+                e["area"], e["salon"], "Si" if e["necesita_reparacion"] else "No",
+            ]
+            for e in equipos
+        ],
+        [12, 22, 16, 11, 18, 9, 7],
+    )
+
+
+def pedir_ubicacion_equipo(piso_actual=None, area_actual=None, salon_actual=None):
+    # Piso y area de las mismas listas del registro de solicitudes; salon o lugar libre
+    piso = elegir_de_lista("Piso", list(PISOS), lambda p: p + (" (actual)" if p == piso_actual else ""))
+    if not piso:
+        return None
+    area = elegir_de_lista(
+        f"Area de {piso}",
+        list(AREAS_POR_PISO[piso]),
+        lambda a: a + (" (actual)" if piso == piso_actual and a == area_actual else ""),
+    )
+    if not area:
+        return None
+    while True:
+        etiqueta = "Salon o lugar (ej. 104, LAB-REDES, CUB-3)"
+        salon = entrada(etiqueta, salon_actual) if salon_actual else pedir_texto(etiqueta)
+        if len(salon) <= MAX_SALON:
+            return piso, area, salon
+        mensaje(f"El salon o lugar no puede pasar de {MAX_SALON} caracteres.")
+
+
+def pedir_dato_equipo(etiqueta, maximo, actual=None):
+    while True:
+        valor = entrada(etiqueta, actual) if actual else pedir_texto(etiqueta)
+        if len(valor) <= maximo:
+            return valor
+        mensaje(f"El texto no puede pasar de {maximo} caracteres (escribiste {len(valor)}).")
+
+
+def flujo_registrar_equipo(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Registrar equipo")
+    mensaje("El equipo se registra en el edificio Docencia 1.")
+    while True:
+        codigo = pedir_texto(
+            "\nCodigo de inventario (etiqueta del equipo, ej. EQ-D1-PROY02) (0 para cancelar)",
+            permitir_cancelar=True,
+        )
+        if not codigo:
+            return
+        codigo = codigo.upper()
+        if len(codigo) > MAX_CODIGO_EQUIPO:
+            mensaje(f"El codigo no puede pasar de {MAX_CODIGO_EQUIPO} caracteres.")
+        elif existe_equipo(codigo):
+            mensaje(f"Ya existe un equipo con el codigo {codigo}. Escribe otro.")
+        else:
+            break
+
+    nombre = pedir_dato_equipo("Nombre del equipo", MAX_NOMBRE_EQUIPO)
+    tipo = pedir_dato_equipo("Tipo (ej. Equipo de Computo, Climatizacion)", MAX_TIPO_EQUIPO)
+    ubicacion = pedir_ubicacion_equipo()
+    if not ubicacion:
+        return
+    piso, area, salon = ubicacion
+
+    registrado = registrar_equipo(codigo, nombre, tipo, piso, area, salon)
+    mensaje(f"\nEquipo {registrado} registrado en Docencia 1, {piso}, {area}, {salon}.")
+
+
+def flujo_editar_equipo(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Editar equipo")
+    equipo = elegir_de_lista("Equipo a editar", listar_equipos(), formato_equipo)
+    if not equipo:
+        return
+    mensaje("\nPresiona Enter para conservar el valor actual.")
+    nombre = pedir_dato_equipo("Nombre del equipo", MAX_NOMBRE_EQUIPO, equipo["nombre_equipo"])
+    tipo = pedir_dato_equipo("Tipo", MAX_TIPO_EQUIPO, equipo["tipo_equipo_instalacion"])
+
+    piso, area, salon = equipo["piso"], equipo["area"], equipo["salon"]
+    if confirmar("Cambiar el piso o el area del equipo?", False):
+        ubicacion = pedir_ubicacion_equipo(piso, area, salon)
+        if not ubicacion:
+            return
+        piso, area, salon = ubicacion
+    else:
+        while True:
+            salon = entrada("Salon o lugar", equipo["salon"])
+            if len(salon) <= MAX_SALON:
+                break
+            mensaje(f"El salon o lugar no puede pasar de {MAX_SALON} caracteres.")
+
+    editar_equipo(equipo["codigo_inventario"], nombre, tipo, piso, area, salon)
+    mensaje(f"\nEquipo {equipo['codigo_inventario']} actualizado: {nombre} (Docencia 1, {piso}, {area}, {salon}).")
+
+
+def flujo_eliminar_equipo(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Eliminar equipo")
+    equipo = elegir_de_lista(
+        "Equipo a eliminar",
+        listar_equipos(),
+        lambda e: formato_equipo(e)
+        + (f" - {e['reportes']} reporte(s), {e['planes']} plan(es)" if e["reportes"] or e["planes"] else ""),
+    )
+    if not equipo:
+        return
+    # Se valida antes de pedir confirmacion; eliminar_equipo vuelve a revisarlo como respaldo
+    folios, planes = usos_equipo(equipo["codigo_inventario"])
+    if folios or planes:
+        mensaje(f"\nAviso: {equipo['nombre_equipo']} no puede eliminarse para no perder el historial.")
+        if folios:
+            mensaje(f"Aparece en los reportes: {', '.join(folios)}.", "    ")
+        if planes:
+            mensaje(f"Aparece en los planes: {', '.join(planes)}.", "    ")
+        return
+    mensaje(f"\nSe eliminara el equipo {equipo['nombre_equipo']} ({equipo['codigo_inventario']}).")
+    if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
+        mensaje("Operacion cancelada.")
+        return
+    nombre = eliminar_equipo(equipo["codigo_inventario"])
+    mensaje(f"\nEquipo {nombre} eliminado.")
+
+
+def menu_equipos(sesion):
+    if not sesion.get("es_supervisor"):
+        mensaje("Solo un supervisor puede gestionar los equipos.")
+        return
+    while True:
+        limpiar_pantalla(sesion)
+        mostrar_menu(
+            "Gestion de equipos",
+            [
+                ("1", "Ver equipos"),
+                ("2", "Registrar equipo"),
+                ("3", "Editar ubicacion o datos de un equipo"),
+                ("4", "Eliminar equipo"),
+                ("0", "Regresar"),
+            ],
+        )
+        op = pedir_opcion(["0", "1", "2", "3", "4"])
+        if op == "0":
+            break
+        if op == "1":
+            ejecutar_opcion(mostrar_equipos, sesion)
+        elif op == "2":
+            ejecutar_opcion(flujo_registrar_equipo, sesion)
+        elif op == "3":
+            ejecutar_opcion(flujo_editar_equipo, sesion)
+        elif op == "4":
+            ejecutar_opcion(flujo_eliminar_equipo, sesion)
+        pausar()
+
+
+# ---------------------------------------------------------------------------
 # Menus
 # ---------------------------------------------------------------------------
 
@@ -1333,10 +1515,11 @@ def menu_mantenimiento(sesion):
             ("6", "Gestion de materiales (inventario, altas, bajas)"),
             ("7", "Consultas del sistema"),
             ("8", "Gestion de personal (registro y baja de tecnicos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
+            ("9", "Gestion de equipos (altas, cambios y bajas)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
             ("0", "Cerrar sesion"),
         ]
         mostrar_menu("Menu mantenimiento", opciones)
-        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6", "7", "8"])
+        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
         if op == "0":
             break
         if op == "6":
@@ -1347,6 +1530,11 @@ def menu_mantenimiento(sesion):
             continue
         if op == "8":
             menu_personal(sesion)
+            if not sesion.get("es_supervisor"):
+                pausar()
+            continue
+        if op == "9":
+            menu_equipos(sesion)
             if not sesion.get("es_supervisor"):
                 pausar()
             continue

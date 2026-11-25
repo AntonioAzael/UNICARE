@@ -361,7 +361,7 @@ def consultar_reportes_por_estado(nombre_estado=None):
 
 def consultar_reportes_piso_area():
     # Consulta 10: numero de reportes por piso y area, con una columna por estado.
-    # El total incluye todos los estados (tambien Cancelado).
+    # El total es la suma de las cinco columnas de estado.
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
@@ -374,6 +374,7 @@ def consultar_reportes_piso_area():
                 COUNT(CASE WHEN r.nombre_estado = 'En revision' THEN 1 END) AS en_revision,
                 COUNT(CASE WHEN r.nombre_estado = 'En proceso' THEN 1 END) AS en_proceso,
                 COUNT(CASE WHEN r.nombre_estado = 'Solucionado' THEN 1 END) AS solucionado,
+                COUNT(CASE WHEN r.nombre_estado = 'Cancelado' THEN 1 END) AS cancelado,
                 COUNT(*) AS total
             FROM reporte r
             GROUP BY r.piso, r.area
