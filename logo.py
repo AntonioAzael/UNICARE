@@ -1,130 +1,115 @@
 """Modulo para despliegue del logo de UNICARE en consola.
 
-Arte ASCII generado a partir de la imagen oficial mediante:
-https://ascii-art.botecodigital.dev.br/es#ascii-convertido
+El logo se dibuja con medios bloques (▀ ▄): cada caracter pinta dos filas de la cuadricula,
+una con el color del texto y otra con el color de fondo.
 """
+
+import ctypes
+import os
 
 from rich import box
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
-# Arte ASCII completo (130 columnas x 60 lineas) generado por el convertidor
-LOGO_ASCII_COMPLETO = """
-                                                      ::########################@@                                                          
-                                                ########################################mm                                                  
-                                          @@##################################################                                              
-                                      @@##########################################################                                          
-                                  ++##################################################################                                      
-                                ######################MM                        ..######################                                    
-                            --##################mm                                      ##################MM                                
-                          ##################                                                ##################                              
-                        ################--                        MM..                          ################                            
-                      ################                        ::########                          @@##############                          
-                    ##############::                      ..################                        --############@@                        
-                  MM############                        ########################                      ..############--                      
-                ..############                      ##############################@@                      ############                      
-                ############                    ################      MM##############::                  ::############                    
-              ############--                @@################--        ##################                  ############--                  
-            ..##########@@              ++####################          ######################                ############                  
-            ############            --########################mm        ##########################            ..##########::                
-          --##########            ##############################::    ################################          ############                
-          ############        ##########################################################################MM        ##########                
-          ##########        ##############################################################################MM      ############              
-        ############                                                                                              ++##########              
-        ##########                MM##############@@      ##################        ################                mm########              
-        ##########                MM##############@@      ##################        ################                          MM            
-      mm##########                MM##############@@      ##################        ################              ......                    
-      ##########--                  ##############@@        ################        ##############          ----..........----              
-      ##########                    ##############@@        ################        ############mm      ----................                
-      ##########                    ##############@@        ################        ##########MM      ....................                  
-      ##########        --          ##############@@        ################        ##########      ..................                      
-      ########      ....            ##############@@        ################        ########      ..................                        
-      ######      ....--            ##############@@        ################        ########      ..............                            
-      ####..    ......              ##############@@        ################        ######      ................                            
-      ##@@    ......                ##############@@        ################        ######      ................                            
-      ##    ........                ##############@@        ################        ######      ................                      --    
-      ++  ........                  ##############@@        ################        ######      ................                    ....    
-          ........                  ##############@@        ################        ######      ..............--..              ........    
-        --........                  ##############@@        ################        ####      ....................            ..........    
-        --........                  ##############@@        ################        @@        ......................        ............    
-        ..........                  ##############@@        ################              ..............................................    
-      ............                  ##############@@        ################            ..............................................      
-      ............                  ##############@@        ##############mm        ..............................................--..      
-      ............                  ##############@@        ##########::          --................................................        
-      ............                  ##############@@        ######            ....................................................          
-      ..............                ##############@@        ++            ......................................................            
-        ..............              ##############@@                  ..................................      ............--                
-        --..............            @@####MM--                  ......................................                                      
-          ..................                            ....--....................................        ##MM                              
-          ....................--..              ................................................        ##############                      
-            ................................................................................        ################                        
-              ..........................................................................        --################MM                        
-                ....................................................................          ####################                          
-                  ........................................................--..            ######################                            
-                      ..................................................              ########################                              
-                          ....................................--..              MM##########################                                
-                                    ..................                    ++############################MM                                  
-                              ##                                  --##################################                                      
-                                ++##########@@MMMMMMMM@@############################################                                        
-                                    ############################################################                                            
-                                        ####################################################                                                
-                                            ::########################################++                                                    
-                                                    ############################                                                            
-""".strip("\r\n")
 
-# Version ajustada (65 columnas x 30 lineas) para visualizacion limpia en terminal
-LOGO_ASCII_TERMINAL = """
-                        :############@                           
-                  @#########################                     
-              +#################################                 
-           -#########m                   #########M              
-         ########-            M.             ########            
-       #######:           .########            -######@          
-     .######           ###############@           ######         
-    ######-        @########-    #########         ######-       
-   ######      -############m    #############      .#####:      
-  ######    #####################################M    #####      
- ######                                               +#####     
- #####        M#######@   #########    ########             M    
-#####-         #######@    ########    #######     --.....--     
-#####          #######@    ########    #####M   ..........       
-####   ..      #######@    ########    ####   .........          
-##.  ...       #######@    ########    ###   ........            
-#  ....        #######@    ########    ###   ........           -
-  ....         #######@    ########    ###   .......-.       ....
- -....         #######@    ########    @    ...........    ......
-......         #######@    ########      ....................... 
-......         #######@    #####:     -........................  
-.......        #######@    +      ...........................    
- -.......      @##M-         ...................                 
-  ..........-.       ........................    #######         
-    .....................................    -########M          
-      ............................-.      ###########            
-          ..................-.       M#############              
-            #                 -#################                 
-               ##############################                    
-                   :####################+                        
-""".strip("\r\n")
+def _habilitar_color_completo():
+    # En la consola clasica de Windows (conhost) las secuencias VT vienen apagadas y rich
+    # cae a 16 colores. Se encienden aqui, antes de que main.py cree su Console, para que
+    # rich detecte color verdadero y el logo salga con los colores exactos.
+    # En terminales que ya las tienen (VS Code, Windows Terminal) no cambia nada.
+    if os.name != "nt":
+        return
+    try:
+        kernel32 = ctypes.windll.kernel32
+        salida = kernel32.GetStdHandle(-11)
+        modo = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(salida, ctypes.byref(modo)):
+            kernel32.SetConsoleMode(salida, modo.value | 0x0004)
+    except (AttributeError, OSError):
+        pass
+
+
+_habilitar_color_completo()
+
+LOGO_FILAS = [
+    "...............BBBBBB...................",
+    "............BBBBBBBBBBBB................",
+    "..........BBBBBBBBBBBBBBBB..............",
+    "........BBBBBBWWWWWWWWBBBBBB............",
+    ".......BBBBBWWWWWBBWWWWWBBBBB...........",
+    "......BBBBWWWWWBBBBBBWWWWWBBBB..........",
+    ".....BBBBWWWWBBBBWWBBBBWWWWBBBB.........",
+    ".....BBBWWWWBBBBBWWBBBBBWWWWBBB.........",
+    "....BBBWWWBBBBBBBBBBBBBBBBWWWBBB........",
+    "....BBBWBBBBBBBBBBBBBBBBBBBBWBBB........",
+    "...BBBWWWWWWWWWWWWWWWWWWWWWWWWW.........",
+    "...BBBWWWWBBBBWWBBBBWWBBBBWWWWW.........",
+    "...BBBWWWWBBBBWWBBBBWWBBBBWWYYYYYY......",
+    "...BBBWWYYBBBBWWBBBBWWBBBBWYYYYYYYY.....",
+    "...BBBWWYYBBBBWWBBBBWWBBBBWYYYYY........",
+    "...BBBWYYYBBBBWWBBBBWWBBBBWYYYY.........",
+    "...BBBYYYYBBBBWWBBBBWWBBBBWYYYY.....YY..",
+    "...BYYYYYYBBBBWWBBBBWWBYYYYYYYYY..YYYY..",
+    "....YYYYYYBBBBWWBBBBWWBYYYYYYYYYYYYYY...",
+    "....YYYYYYYBBBWWBBBBWWYYYYYYYYYYYYYY....",
+    ".....YYYYYYYYBWWBBBBYYYYYYYYYYYYYYY.....",
+    ".....BYYYYYYYYYYYYYYYYYYYYYYYYB.........",
+    "......BYYYYYYYYYYYYYYYYYYYYBBB..........",
+    ".......BBBYYYYYYYYYYYYYYBBBBB...........",
+    "........BBBBBBYYYYYYBBBBBBBB............",
+    "..........BBBBBBBBBBBBBBBB..............",
+    "............BBBBBBBBBBBB................",
+    "...............BBBBBB...................",
+]
+
+COLORES = {
+    "B": "#11559C",
+    "W": "#F5F7FA",
+    "Y": "#F5A600",
+}
+
+
+def construir_logo():
+    texto = Text(no_wrap=True)
+    for y in range(0, len(LOGO_FILAS), 2):
+        fila1 = LOGO_FILAS[y]
+        fila2 = LOGO_FILAS[y + 1] if y + 1 < len(LOGO_FILAS) else "." * len(fila1)
+        for c1, c2 in zip(fila1, fila2):
+            col1 = COLORES.get(c1)
+            col2 = COLORES.get(c2)
+            if col1 and col2:
+                texto.append("▀", style=f"{col1} on {col2}")
+            elif col1:
+                texto.append("▀", style=col1)
+            elif col2:
+                texto.append("▄", style=col2)
+            else:
+                texto.append(" ")
+        if y + 2 < len(LOGO_FILAS):
+            texto.append("\n")
+    return texto
 
 
 def mostrar_banner_unicare(console):
-    # Si la consola es muy ancha (>= 140 columnas), se usa la version completa
-    # Para consolas estandar se usa la version ajustada que evita desbordamientos
-    if console.width >= 140:
-        arte = LOGO_ASCII_COMPLETO
-        espacio_unicare = " " * 61
-        espacio_sub = " " * 42
-        espacio_inst = " " * 49
-    else:
-        arte = LOGO_ASCII_TERMINAL
-        espacio_unicare = " " * 28
-        espacio_sub = " " * 9
-        espacio_inst = " " * 16
+    # Se imprime con el mismo Console de main.py
+    cuadricula = Table.grid(padding=(0, 3))
+    cuadricula.add_column(justify="left", vertical="middle", no_wrap=True)
+    cuadricula.add_column(justify="left", vertical="middle")
 
-    contenido = Text()
-    contenido.append(arte + "\n\n")
-    contenido.append(espacio_unicare + "UNICARE\n", style="bold")
-    contenido.append(espacio_sub + "Sistema de Reportes y Mantenimiento Universitario\n")
-    contenido.append(espacio_inst + "Universidad Tecnológica de Tijuana\n", style="dim")
+    titulo = Text()
+    titulo.append("█   █ █   █ ███ ", style="bold #2B7FD9")
+    titulo.append(" ████  ███  ████  █████\n", style="bold #F5A600")
+    titulo.append("█   █ ██  █  █  ", style="bold #2B7FD9")
+    titulo.append("█     █   █ █   █ █    \n", style="bold #F5A600")
+    titulo.append("█   █ █ █ █  █  ", style="bold #2B7FD9")
+    titulo.append("█     █████ ████  ████ \n", style="bold #F5A600")
+    titulo.append("█   █ █  ██  █  ", style="bold #2B7FD9")
+    titulo.append("█     █   █ █  █  █    \n", style="bold #F5A600")
+    titulo.append(" ███  █   █ ███ ", style="bold #2B7FD9")
+    titulo.append(" ████ █   █ █   █ █████\n\n", style="bold #F5A600")
+    titulo.append("Sistema de Reportes de Mantenimiento Universitario\n", style="bold white")
+    titulo.append("Universidad Tecnológica de Tijuana", style="dim")
 
-    console.print(Panel(contenido, box=box.ROUNDED, expand=False, border_style="white"))
+    cuadricula.add_row(construir_logo(), titulo)
+    console.print(Panel(cuadricula, border_style="#2B7FD9", box=box.ROUNDED, padding=(0, 2)))
