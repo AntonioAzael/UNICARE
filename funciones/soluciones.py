@@ -1,5 +1,6 @@
 from datetime import date
 from conexion import conectar
+from funciones.solicitudes import SQL_UBICACION
 
 
 def listar_reportes_sin_solucion():
@@ -8,10 +9,13 @@ def listar_reportes_sin_solucion():
     try:
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
-            """
-            SELECT r.folio, r.fecha_registro, r.nombre_estado, e.nombre_equipo, r.descripcion_reporte
+            f"""
+            SELECT r.folio, r.fecha_registro, r.nombre_estado, r.descripcion_reporte,
+                   COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                   {SQL_UBICACION} AS ubicacion
             FROM reporte r
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             LEFT JOIN solucion s ON s.folio = r.folio
             WHERE s.numero_solucion IS NULL
             ORDER BY r.fecha_registro DESC, r.folio DESC
@@ -104,11 +108,11 @@ def consultar_soluciones():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT s.numero_solucion, s.folio, e.nombre_equipo, s.fecha_resolucion, s.tiempo_resolucion,
-                   s.solucion_aplicada, s.observaciones_solucion
+            SELECT s.numero_solucion, s.folio, COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                   s.fecha_resolucion, s.tiempo_resolucion, s.solucion_aplicada, s.observaciones_solucion
             FROM solucion s
             INNER JOIN reporte r ON r.folio = s.folio
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             ORDER BY s.fecha_resolucion DESC, s.numero_solucion DESC
             """
         )

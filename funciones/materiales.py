@@ -26,10 +26,11 @@ def listar_soluciones_registradas():
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT s.numero_solucion, s.folio, e.nombre_equipo, s.fecha_resolucion
+            SELECT s.numero_solucion, s.folio, COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                   s.fecha_resolucion
             FROM solucion s
             INNER JOIN reporte r ON r.folio = s.folio
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             ORDER BY s.numero_solucion DESC
             """
         )

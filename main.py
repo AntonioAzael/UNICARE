@@ -46,6 +46,14 @@ from funciones.soluciones import (
     registrar_solucion,
 )
 from funciones.solicitudes import (
+    AREA_BANOS,
+    AREA_RACK,
+    AREAS_POR_PISO,
+    EJEMPLOS_LUGAR,
+    LUGARES_BANO,
+    MAX_DESCRIPCION,
+    MAX_LUGAR,
+    PISOS,
     consultar_solicitudes_por_fecha,
     listar_catalogos_solicitud,
     listar_fechas_solicitudes,
@@ -310,48 +318,52 @@ def flujo_registrar_personal(sesion):
 # Registro 1 y Consulta 1: solicitudes
 # ---------------------------------------------------------------------------
 
+def pedir_texto_limitado(etiqueta, maximo):
+    # Texto obligatorio con largo maximo; regresa None si el usuario escribe 0
+    while True:
+        valor = pedir_texto(etiqueta, permitir_cancelar=True)
+        if valor is None or len(valor) <= maximo:
+            return valor
+        mensaje(f"El texto no puede pasar de {maximo} caracteres (escribiste {len(valor)}).")
+
+
 def flujo_registrar_solicitud(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar solicitud de mantenimiento")
-    cats = listar_catalogos_solicitud()
-    equipo = elegir_de_lista(
-        "Equipo afectado",
-        cats["equipos"],
-        lambda e: f"{e['nombre_equipo']} - {e['nombre_edificio']}, Salon {e['salon']}",
-    )
-    if not equipo:
+    mensaje("Las solicitudes se registran para el edificio Docencia 1.")
+
+    piso = elegir_de_lista("Piso donde esta el problema", list(PISOS), lambda p: p)
+    if not piso:
         return
 
-    categoria = elegir_de_lista(
-        "Tipo de problema",
-        cats["categorias"],
-        lambda c: f"{c['nombre_categoria']} ({c['descripcion_categoria']})",
-    )
-    if not categoria:
+    area = elegir_de_lista(f"Area de {piso}", list(AREAS_POR_PISO[piso]), lambda a: a)
+    if not area:
         return
 
-    prioridad = elegir_de_lista(
-        "Prioridad",
-        cats["prioridades"],
-        lambda p: f"{p['nombre_prioridad']} ({p['descripcion_prioridad']})",
+    if area == AREA_RACK:
+        lugar = AREA_RACK
+        mensaje("\nEl lugar queda registrado como Rack de servidores.")
+    elif area == AREA_BANOS:
+        lugar = elegir_de_lista("Bano", list(LUGARES_BANO), lambda b: b)
+        if not lugar:
+            return
+    else:
+        lugar = pedir_texto_limitado(
+            f"\nEscribe el lugar exacto (ej. {EJEMPLOS_LUGAR[area]}) (0 para cancelar)", MAX_LUGAR
+        )
+        if not lugar:
+            return
+
+    descripcion = pedir_texto_limitado(
+        "\nDescribe el problema con tus propias palabras (0 para cancelar)", MAX_DESCRIPCION
     )
-    if not prioridad:
+    if not descripcion:
         return
 
-    descripcion = input("\nDescripcion del problema (0 para cancelar): ").strip()
-    if descripcion == "0" or not descripcion:
-        return
-    observaciones = entrada("Observaciones (opcional)")
-
-    folio = registrar_solicitud(
-        sesion["numero"],
-        equipo["codigo_inventario"],
-        categoria["nombre_categoria"],
-        prioridad["nombre_prioridad"],
-        descripcion,
-        observaciones or None,
-    )
+    folio = registrar_solicitud(sesion["numero"], piso, area, lugar, descripcion)
     mensaje(f"\nSolicitud registrada con numero {folio}.")
+    mensaje(f"Ubicacion: Docencia 1, {piso}, {area}, {lugar}.")
+    mensaje("Mantenimiento asignara la categoria, la prioridad y el equipo afectado.")
 
 
 def mostrar_consulta_solicitudes(sesion, solo_mias=False):
@@ -385,9 +397,10 @@ def mostrar_consulta_solicitudes(sesion, solo_mias=False):
                 ("Fecha de solicitud", r["fecha_registro"]),
                 ("No. solicitud", r["folio"]),
                 ("Usuario", r["nombre_usuario"]),
+                ("Ubicacion", r["ubicacion"]),
                 ("Equipo afectado", r["nombre_equipo"]),
-                ("Ubicacion", r["ubicacion_equipo"]),
                 ("Tipo de problema", r["descripcion_categoria"]),
+                ("Prioridad", r["nombre_prioridad"]),
                 ("Problema", r["descripcion_reporte"]),
                 ("Estado", r["descripcion_estado"]),
                 ("Observaciones", r["observaciones"] or "Sin observaciones"),
@@ -458,6 +471,9 @@ def mostrar_consulta_ordenes_edificio(sesion):
                 ("No. orden", o["clave_mantenimiento"]),
                 ("No. solicitud", o["folio"]),
                 ("Edificio", o["nombre_edificio"]),
+                ("Piso", o["piso"]),
+                ("Area", o["area"]),
+                ("Lugar", o["lugar"]),
                 ("Tipo de mantenimiento", o["descripcion_tipo"]),
                 ("Estado actual", o["descripcion_estado"]),
                 ("Trabajo a realizar", o["descripcion_trabajo"]),
@@ -548,11 +564,55 @@ def flujo_registrar_orden(sesion):
     sol = elegir_de_lista(
         "Solicitud de mantenimiento",
         solicitudes,
-        lambda s: f"{s['folio']} | {s['fecha_registro']} | {s['nombre_equipo']} ({s['nombre_estado']})",
+        lambda s: f"{s['folio']} | {s['fecha_registro']} | {s['ubicacion']} ({s['nombre_estado']})",
     )
     if not sol:
         return
+    mensaje(f"Ubicacion: {sol['ubicacion']}")
     mensaje(f"Problema reportado: {sol['descripcion_reporte']}")
+
+    # Mantenimiento clasifica la solicitud: categoria y prioridad si faltan, equipo opcional
+    cats = listar_catalogos_solicitud()
+    nombre_categoria = None
+    if not sol["nombre_categoria"]:
+        categoria = elegir_de_lista(
+            "Categoria del problema",
+            cats["categorias"],
+            lambda c: f"{c['nombre_categoria']} ({c['descripcion_categoria']})",
+        )
+        if not categoria:
+            return
+        nombre_categoria = categoria["nombre_categoria"]
+    else:
+        mensaje(f"Categoria: {sol['nombre_categoria']}")
+
+    nombre_prioridad = None
+    if not sol["nombre_prioridad"]:
+        prioridad = elegir_de_lista(
+            "Prioridad",
+            cats["prioridades"],
+            lambda p: f"{p['nombre_prioridad']} ({p['descripcion_prioridad']})",
+        )
+        if not prioridad:
+            return
+        nombre_prioridad = prioridad["nombre_prioridad"]
+    else:
+        mensaje(f"Prioridad: {sol['nombre_prioridad']}")
+
+    codigo_inventario = None
+    if not sol["codigo_inventario"]:
+        ninguno = {"codigo_inventario": None}
+        equipo = elegir_de_lista(
+            "Equipo afectado (opcional)",
+            [ninguno] + cats["equipos"],
+            lambda e: "Ninguno" if e is ninguno
+            else f"{e['nombre_equipo']} ({e['piso']}, {e['area']}, {e['salon']})",
+        )
+        if not equipo:
+            return
+        codigo_inventario = equipo["codigo_inventario"]
+    else:
+        mensaje(f"Equipo afectado: {sol['nombre_equipo']}")
 
     tipo = elegir_de_lista(
         "Tipo de mantenimiento",
@@ -581,8 +641,12 @@ def flujo_registrar_orden(sesion):
         obs or None,
         mano_obra,
         materiales,
+        nombre_categoria,
+        nombre_prioridad,
+        codigo_inventario,
     )
     mensaje(f"\nOrden de trabajo {clave} registrada correctamente.")
+    mensaje(f"La solicitud {sol['folio']} quedo clasificada con su categoria y prioridad.")
 
 
 def flujo_asignar_tecnicos(sesion):
@@ -598,11 +662,11 @@ def flujo_asignar_tecnicos(sesion):
 
     tecnicos = listar_tecnicos()
     asignaciones = []
-    elegidos_ids = set()
+    elegidos = set()
 
     mensaje("\nSe requiere asignar al menos 2 tecnicos a la orden.")
     while True:
-        disponibles = [t for t in tecnicos if t["numero_empleado"] not in elegidos_ids]
+        disponibles = [t for t in tecnicos if t["numero_empleado"] not in elegidos]
         if not disponibles:
             break
         tecnico = elegir_de_lista(
@@ -626,7 +690,7 @@ def flujo_asignar_tecnicos(sesion):
                 "actividad": actividad,
             }
         )
-        elegidos_ids.add(tecnico["numero_empleado"])
+        elegidos.add(tecnico["numero_empleado"])
 
         if len(asignaciones) >= 2 and not confirmar("Asignar otro tecnico adicional?", False):
             break
@@ -721,10 +785,11 @@ def flujo_registrar_solucion(sesion):
     reporte = elegir_de_lista(
         "Reporte sin solucion",
         listar_reportes_sin_solucion(),
-        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['nombre_equipo']} ({r['nombre_estado']})",
+        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['ubicacion']} ({r['nombre_estado']})",
     )
     if not reporte:
         return
+    mensaje(f"Equipo afectado: {reporte['nombre_equipo']}")
     mensaje(f"Problema reportado: {reporte['descripcion_reporte']}")
 
     aplicada = pedir_texto("\nSolucion aplicada (0 para cancelar)", permitir_cancelar=True)

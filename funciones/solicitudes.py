@@ -6,6 +6,28 @@ from conexion import conectar
 TIPOS_USUARIO = ("Estudiante", "Docente", "Administrativo")
 DOMINIO_CORREO = "@ut-tijuana.edu.mx"
 
+# Ubicacion de una solicitud: el sistema atiende solo el edificio Docencia 1
+EDIFICIO_SISTEMA = "ED-DOC1"
+PISOS = ("Planta baja", "Planta alta")
+AREAS_POR_PISO = {
+    "Planta baja": ("Salones", "Oficinas/Cubiculos", "Laboratorios", "Banos", "Rack de servidores"),
+    "Planta alta": ("Salones", "Oficinas/Cubiculos", "Laboratorios"),
+}
+# Areas donde el solicitante escribe el lugar con sus palabras (con un ejemplo)
+EJEMPLOS_LUGAR = {
+    "Salones": "Salon 104",
+    "Oficinas/Cubiculos": "Cubiculo 3",
+    "Laboratorios": "Laboratorio de Redes",
+}
+AREA_BANOS = "Banos"
+LUGARES_BANO = ("Bano de hombres", "Bano de mujeres")
+AREA_RACK = "Rack de servidores"
+MAX_LUGAR = 60
+MAX_DESCRIPCION = 250
+
+# Ubicacion completa de un reporte: "<edificio>, <piso>, <area>, <lugar>"
+SQL_UBICACION = "CONCAT_WS(', ', ed.nombre_edificio, r.piso, r.area, r.lugar)"
+
 
 def listar_usuarios():
     cnx = conectar()
@@ -69,8 +91,10 @@ def listar_catalogos_solicitud():
             SELECT e.codigo_inventario, e.nombre_equipo, ed.nombre_edificio, e.piso, e.salon, e.area
             FROM equipo_instalacion e
             INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
-            ORDER BY ed.nombre_edificio, e.salon
-            """
+            WHERE e.clave_edificio = %s
+            ORDER BY e.piso, e.area, e.salon
+            """,
+            (EDIFICIO_SISTEMA,),
         )
         equipos = cursor.fetchall()
         cursor.close()
@@ -92,14 +116,32 @@ def _siguiente_folio(cursor, anio):
     return f"{prefijo}{numero:04d}"
 
 
-def registrar_solicitud(numero_cuenta, codigo_inventario, nombre_categoria, nombre_prioridad, descripcion_reporte, observaciones=None):
+def registrar_solicitud(numero_cuenta, piso, area, lugar, descripcion_reporte):
+    # Registro 1: el solicitante indica la ubicacion y describe el problema.
+    # Categoria, prioridad y equipo quedan en NULL; los asigna mantenimiento en la orden de trabajo.
+    if piso not in PISOS:
+        raise ValueError("El piso elegido no es valido.")
+    if area not in AREAS_POR_PISO[piso]:
+        raise ValueError(f"El area {area} no existe en {piso}.")
+    if area == AREA_RACK:
+        lugar = AREA_RACK
+    elif area == AREA_BANOS:
+        if lugar not in LUGARES_BANO:
+            raise ValueError("Elige el bano de hombres o el de mujeres.")
+    else:
+        lugar = (lugar or "").strip()
+        if not lugar:
+            raise ValueError("El lugar no puede ir vacio.")
+        if len(lugar) > MAX_LUGAR:
+            raise ValueError(f"El lugar no puede pasar de {MAX_LUGAR} caracteres.")
+
     descripcion = descripcion_reporte.strip()
     if not descripcion:
         raise ValueError("La descripcion del problema no puede ir vacia.")
+    if len(descripcion) > MAX_DESCRIPCION:
+        raise ValueError(f"La descripcion no puede pasar de {MAX_DESCRIPCION} caracteres.")
 
     fecha = date.today()
-    obs = observaciones.strip() if observaciones and observaciones.strip() else None
-
     cnx = conectar()
     try:
         cnx.start_transaction()
@@ -108,15 +150,11 @@ def registrar_solicitud(numero_cuenta, codigo_inventario, nombre_categoria, nomb
         cursor.execute(
             """
             INSERT INTO reporte (
-                folio, descripcion_reporte, observaciones, fecha_registro,
-                numero_cuenta, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
-            ) VALUES (%s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s)
+                folio, descripcion_reporte, observaciones, fecha_registro, piso, area, lugar,
+                numero_cuenta, clave_edificio, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
+            ) VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, 'Pendiente', NULL, NULL, NULL)
             """,
-            (folio, descripcion, obs, fecha, numero_cuenta, nombre_categoria, nombre_prioridad, codigo_inventario),
-        )
-        cursor.execute(
-            "UPDATE equipo_instalacion SET necesita_reparacion = 1 WHERE codigo_inventario = %s",
-            (codigo_inventario,),
+            (folio, descripcion, fecha, piso, area, lugar, numero_cuenta, EDIFICIO_SISTEMA),
         )
         cnx.commit()
         cursor.close()
@@ -151,23 +189,25 @@ def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        sql = """
+        # Categoria, prioridad y equipo pueden faltar mientras mantenimiento no los asigne (LEFT JOIN)
+        sql = f"""
             SELECT
                 r.fecha_registro,
                 r.folio,
                 CONCAT_WS(' ', u.nombre, u.primer_apellido, u.segundo_apellido) AS nombre_usuario,
-                e.nombre_equipo,
-                CONCAT(ed.nombre_edificio, ', ', e.piso, ', Salon ', e.salon, ' (', e.area, ')') AS ubicacion_equipo,
-                c.descripcion_categoria,
+                {SQL_UBICACION} AS ubicacion,
+                COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                COALESCE(c.descripcion_categoria, 'Sin clasificar') AS descripcion_categoria,
+                COALESCE(r.nombre_prioridad, 'Sin asignar') AS nombre_prioridad,
                 r.descripcion_reporte,
                 es.descripcion_estado,
                 r.observaciones
             FROM reporte r
             INNER JOIN usuario u ON u.numero_cuenta = r.numero_cuenta
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
-            INNER JOIN categoria c ON c.nombre_categoria = r.nombre_categoria
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
             INNER JOIN estado es ON es.nombre_estado = r.nombre_estado
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
+            LEFT JOIN categoria c ON c.nombre_categoria = r.nombre_categoria
             WHERE r.fecha_registro = %s
         """
         params = [fecha_consulta]

@@ -1,5 +1,6 @@
 from datetime import date
 from conexion import conectar
+from funciones.solicitudes import SQL_UBICACION
 
 # Nota: "orden de trabajo" es la entidad MANTENIMIENTO del DER (clave_mantenimiento).
 
@@ -9,11 +10,15 @@ def listar_solicitudes_disponibles():
     try:
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
-            """
-            SELECT r.folio, r.fecha_registro, r.nombre_estado, e.nombre_equipo, ed.nombre_edificio, r.descripcion_reporte
+            f"""
+            SELECT r.folio, r.fecha_registro, r.nombre_estado, r.descripcion_reporte,
+                   r.nombre_categoria, r.nombre_prioridad, r.codigo_inventario,
+                   COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                   ed.nombre_edificio,
+                   {SQL_UBICACION} AS ubicacion
             FROM reporte r
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             WHERE r.nombre_estado NOT IN ('Solucionado', 'Cancelado')
               -- Oculta los reportes que ya tienen una orden de trabajo vigente (no cancelada)
               AND NOT EXISTS (
@@ -49,11 +54,11 @@ def listar_ordenes():
         cursor.execute(
             """
             SELECT m.clave_mantenimiento, m.folio, m.nombre_estado, m.fecha_programada,
-                   ed.nombre_edificio, e.nombre_equipo
+                   ed.nombre_edificio, COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo
             FROM mantenimiento m
             INNER JOIN reporte r ON r.folio = m.folio
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC
             """
         )
@@ -105,8 +110,13 @@ def registrar_orden_trabajo(
     observaciones=None,
     costo_mano_obra=0.0,
     costo_materiales=0.0,
+    nombre_categoria=None,
+    nombre_prioridad=None,
+    codigo_inventario=None,
 ):
-    # Registro 2: Registrar la orden de trabajo (mantenimiento) de una solicitud
+    # Registro 2: Registrar la orden de trabajo (mantenimiento) de una solicitud.
+    # En la misma transaccion mantenimiento completa en el reporte la categoria y la prioridad
+    # (si aun no las tiene) y, opcionalmente, liga el equipo afectado.
     descripcion = descripcion_trabajo.strip()
     if not descripcion:
         raise ValueError("La descripcion del trabajo no puede ir vacia.")
@@ -127,6 +137,33 @@ def registrar_orden_trabajo(
             raise ValueError(
                 f"La solicitud {folio} ya tiene la orden de trabajo {vigente['clave_mantenimiento']}."
             )
+
+        cursor.execute(
+            "SELECT nombre_categoria, nombre_prioridad, codigo_inventario FROM reporte WHERE folio = %s",
+            (folio,),
+        )
+        rep = cursor.fetchone()
+        if not rep:
+            raise ValueError(f"La solicitud {folio} ya no existe.")
+        if not (rep["nombre_categoria"] or nombre_categoria) or not (rep["nombre_prioridad"] or nombre_prioridad):
+            raise ValueError("Debes asignar la categoria y la prioridad de la solicitud.")
+        # Solo se llenan los datos que faltan; lo que ya tenia el reporte se conserva
+        cursor.execute(
+            """
+            UPDATE reporte
+            SET nombre_categoria = COALESCE(nombre_categoria, %s),
+                nombre_prioridad = COALESCE(nombre_prioridad, %s),
+                codigo_inventario = COALESCE(codigo_inventario, %s)
+            WHERE folio = %s
+            """,
+            (nombre_categoria, nombre_prioridad, codigo_inventario, folio),
+        )
+        if codigo_inventario and not rep["codigo_inventario"]:
+            cursor.execute(
+                "UPDATE equipo_instalacion SET necesita_reparacion = 1 WHERE codigo_inventario = %s",
+                (codigo_inventario,),
+            )
+
         clave = _siguiente_clave(cursor, hoy.year)
         cursor.execute(
             """
@@ -269,6 +306,7 @@ def consultar_actividades_orden(clave_mantenimiento=None):
 
 def consultar_ordenes_edificio(clave_edificio=None):
     # Consulta 3: Informacion de una orden de trabajo para una solicitud de mantenimiento a un edificio
+    # El edificio, piso, area y lugar se toman del reporte
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
@@ -277,6 +315,9 @@ def consultar_ordenes_edificio(clave_edificio=None):
                 m.clave_mantenimiento,
                 m.folio,
                 ed.nombre_edificio,
+                r.piso,
+                r.area,
+                r.lugar,
                 tm.descripcion_tipo,
                 es.descripcion_estado,
                 m.fecha_creacion,
@@ -289,14 +330,13 @@ def consultar_ordenes_edificio(clave_edificio=None):
                 m.costo_materiales
             FROM mantenimiento m
             INNER JOIN reporte r ON r.folio = m.folio
-            INNER JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
             INNER JOIN tipo_mantenimiento tm ON tm.codigo_tipo = m.codigo_tipo
             INNER JOIN estado es ON es.nombre_estado = m.nombre_estado
         """
         params = []
         if clave_edificio:
-            sql += " WHERE ed.clave_edificio = %s"
+            sql += " WHERE r.clave_edificio = %s"
             params.append(clave_edificio)
         sql += " ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC"
         cursor.execute(sql, tuple(params))
