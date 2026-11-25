@@ -12,7 +12,7 @@ def listar_solicitudes_disponibles():
         cursor.execute(
             f"""
             SELECT r.folio, r.fecha_registro, r.nombre_estado, r.descripcion_reporte,
-                   r.nombre_categoria, r.nombre_prioridad, r.codigo_inventario,
+                   r.nombre_categoria, r.nombre_prioridad, r.codigo_inventario, r.observaciones,
                    COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
                    ed.nombre_edificio,
                    {SQL_UBICACION} AS ubicacion
@@ -113,13 +113,17 @@ def registrar_orden_trabajo(
     nombre_categoria=None,
     nombre_prioridad=None,
     codigo_inventario=None,
+    observaciones_reporte=None,
 ):
     # Registro 2: Registrar la orden de trabajo (mantenimiento) de una solicitud.
-    # En la misma transaccion mantenimiento completa en el reporte la categoria y la prioridad
-    # (si aun no las tiene) y, opcionalmente, liga el equipo afectado.
+    # En la misma transaccion mantenimiento completa en el reporte la categoria, la prioridad
+    # y las observaciones (si aun no las tiene) y, opcionalmente, liga el equipo afectado.
     descripcion = descripcion_trabajo.strip()
     if not descripcion:
         raise ValueError("La descripcion del trabajo no puede ir vacia.")
+    obs_reporte = observaciones_reporte.strip() if observaciones_reporte and observaciones_reporte.strip() else None
+    if obs_reporte and len(obs_reporte) > 250:
+        raise ValueError("Las observaciones del reporte no pueden pasar de 250 caracteres.")
 
     hoy = date.today()
     obs = observaciones.strip() if observaciones and observaciones.strip() else None
@@ -153,10 +157,11 @@ def registrar_orden_trabajo(
             UPDATE reporte
             SET nombre_categoria = COALESCE(nombre_categoria, %s),
                 nombre_prioridad = COALESCE(nombre_prioridad, %s),
-                codigo_inventario = COALESCE(codigo_inventario, %s)
+                codigo_inventario = COALESCE(codigo_inventario, %s),
+                observaciones = COALESCE(observaciones, %s)
             WHERE folio = %s
             """,
-            (nombre_categoria, nombre_prioridad, codigo_inventario, folio),
+            (nombre_categoria, nombre_prioridad, codigo_inventario, obs_reporte, folio),
         )
         if codigo_inventario and not rep["codigo_inventario"]:
             cursor.execute(

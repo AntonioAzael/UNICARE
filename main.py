@@ -14,6 +14,7 @@ from funciones.auth import (
     registrar_tecnico,
 )
 from funciones.materiales import (
+    consultar_materiales_por_reponer,
     eliminar_material,
     listar_inventario,
     listar_soluciones_registradas,
@@ -54,9 +55,15 @@ from funciones.solicitudes import (
     MAX_DESCRIPCION,
     MAX_LUGAR,
     PISOS,
+    consultar_detalle_piso_area,
+    consultar_reportes_piso_area,
+    consultar_reportes_por_estado,
+    consultar_seguimiento_folio,
     consultar_solicitudes_por_fecha,
     listar_catalogos_solicitud,
     listar_fechas_solicitudes,
+    listar_folios,
+    resumen_reportes_por_estado,
     registrar_solicitud,
     registrar_usuario,
 )
@@ -614,6 +621,16 @@ def flujo_registrar_orden(sesion):
     else:
         mensaje(f"Equipo afectado: {sol['nombre_equipo']}")
 
+    observaciones_reporte = None
+    if not sol["observaciones"]:
+        while True:
+            observaciones_reporte = entrada("\nObservaciones del reporte (opcional)")
+            if len(observaciones_reporte) <= 250:
+                break
+            mensaje(f"El texto no puede pasar de 250 caracteres (escribiste {len(observaciones_reporte)}).")
+    else:
+        mensaje(f"Observaciones del reporte: {sol['observaciones']}")
+
     tipo = elegir_de_lista(
         "Tipo de mantenimiento",
         listar_tipos_mantenimiento(),
@@ -629,7 +646,7 @@ def flujo_registrar_orden(sesion):
     trabajo = pedir_texto("Descripcion del trabajo a realizar (0 para cancelar)", permitir_cancelar=True)
     if not trabajo:
         return
-    obs = entrada("Observaciones (opcional)")
+    obs = entrada("Observaciones de la orden (opcional)")
     mano_obra = pedir_decimal("Costo de mano de obra", 0.0)
     materiales = pedir_decimal("Costo de materiales", 0.0)
 
@@ -644,6 +661,7 @@ def flujo_registrar_orden(sesion):
         nombre_categoria,
         nombre_prioridad,
         codigo_inventario,
+        observaciones_reporte or None,
     )
     mensaje(f"\nOrden de trabajo {clave} registrada correctamente.")
     mensaje(f"La solicitud {sol['folio']} quedo clasificada con su categoria y prioridad.")
@@ -847,6 +865,173 @@ def mostrar_consulta_soluciones(sesion):
                 ("Observaciones", s["observaciones_solucion"] or "Sin observaciones"),
             ],
         )
+
+
+# ---------------------------------------------------------------------------
+# Consultas 7, 8, 9 y 10
+# ---------------------------------------------------------------------------
+
+def mostrar_consulta_seguimiento(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Seguimiento de un reporte por folio")
+    elegido = elegir_de_lista(
+        "Reporte",
+        listar_folios(),
+        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['ubicacion']} ({r['nombre_estado']})",
+    )
+    if not elegido:
+        return
+
+    r = consultar_seguimiento_folio(elegido["folio"])
+    imprimir_ficha(
+        f"Reporte {r['folio']}",
+        [
+            ("Folio", r["folio"]),
+            ("Fecha de registro", r["fecha_registro"]),
+            ("Solicitante", r["nombre_usuario"]),
+            ("Ubicacion", r["ubicacion"]),
+            ("Equipo afectado", r["nombre_equipo"]),
+            ("Categoria", r["nombre_categoria"]),
+            ("Prioridad", r["nombre_prioridad"]),
+            ("Estado", r["nombre_estado"]),
+            ("Descripcion", r["descripcion_reporte"]),
+            ("Observaciones", r["observaciones"] or "Sin observaciones"),
+        ],
+    )
+
+    if r["clave_mantenimiento"]:
+        imprimir_ficha(
+            "Orden de trabajo",
+            [
+                ("No. orden", r["clave_mantenimiento"]),
+                ("Estado", r["estado_orden"]),
+                ("Fecha programada", r["fecha_programada"]),
+            ],
+        )
+        if r["tecnicos"]:
+            mensaje("\nTecnicos asignados:")
+            imprimir_tabla(
+                ["Tecnico", "Especialidad", "Horas", "Actividad asignada"],
+                [
+                    [t["nombre_tecnico"], t["especialidad"], f"{float(t['horas_asignadas']):.2f}", t["actividad_asignada"]]
+                    for t in r["tecnicos"]
+                ],
+                [22, 20, 6, 30],
+            )
+        else:
+            mensaje("\nTecnicos asignados: Sin tecnicos")
+    else:
+        imprimir_ficha("Orden de trabajo", [("No. orden", "Sin orden")])
+
+    if r["fecha_resolucion"]:
+        imprimir_ficha(
+            "Solucion",
+            [
+                ("Fecha de resolucion", r["fecha_resolucion"]),
+                ("Solucion aplicada", r["solucion_aplicada"]),
+            ],
+        )
+    else:
+        imprimir_ficha("Solucion", [("Solucion", "Sin solucion")])
+
+
+def mostrar_consulta_reportes_estado(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Reportes pendientes y solucionados")
+    resumen = resumen_reportes_por_estado()
+    mensaje("\nResumen por estado:")
+    imprimir_tabla(
+        ["Estado", "Reportes"],
+        [[e["nombre_estado"], e["total"]] for e in resumen] + [["Total", sum(e["total"] for e in resumen)]],
+        [14, 8],
+    )
+
+    estado = None
+    if confirmar("\nFiltrar por un estado?", False):
+        estado = elegir_de_lista("Estado", resumen, lambda e: f"{e['nombre_estado']} ({e['total']})")
+        if not estado:
+            return
+
+    filas = consultar_reportes_por_estado(estado["nombre_estado"] if estado else None)
+    if not filas:
+        mensaje(f"No hay reportes en estado {estado['nombre_estado']}.")
+        return
+
+    mensaje(f"\nReportes ({len(filas)} registros)")
+    imprimir_tabla(
+        ["Folio", "Fecha", "Ubicacion", "Categoria", "Prioridad", "Estado", "Dias"],
+        [
+            [
+                f["folio"], f["fecha_registro"], f["ubicacion"], f["nombre_categoria"],
+                f["nombre_prioridad"], f["nombre_estado"], f["dias_abiertos"],
+            ]
+            for f in filas
+        ],
+        [13, 10, 24, 15, 11, 11, 4],
+    )
+    mensaje("Dias: dias abiertos hasta la solucion o hasta hoy si aun no se resuelve.")
+
+
+def mostrar_consulta_materiales_reponer(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Materiales por reponer")
+    filas = consultar_materiales_por_reponer()
+    if not filas:
+        mensaje("Todos los materiales estan por encima de su stock minimo.")
+        return
+
+    mensaje(f"\nMateriales en o bajo su stock minimo ({len(filas)} registros)")
+    imprimir_tabla(
+        ["Codigo", "Material", "Existencia", "Minimo", "Faltante", "Total usado", "Soluciones"],
+        [
+            [
+                m["codigo_material"], m["nombre_material"], m["existencia"], m["stock_minimo"],
+                m["faltante"], m["total_usado"], m["soluciones"],
+            ]
+            for m in filas
+        ],
+        [8, 24, 10, 6, 8, 11, 10],
+    )
+
+
+def mostrar_consulta_piso_area(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Reportes por piso y area")
+    filas = consultar_reportes_piso_area()
+    if not filas:
+        mensaje("No hay reportes registrados.")
+        return
+
+    print()
+    imprimir_tabla(
+        ["Piso", "Area", "Pendiente", "En revision", "En proceso", "Solucionado", "Total"],
+        [
+            [
+                f["piso"], f["area"], f["pendiente"], f["en_revision"],
+                f["en_proceso"], f["solucionado"], f["total"],
+            ]
+            for f in filas
+        ],
+        [11, 18, 9, 11, 10, 11, 5],
+    )
+
+    if not confirmar("\nVer el detalle de un piso y area?", False):
+        return
+    grupo = elegir_de_lista(
+        "Piso y area",
+        filas,
+        lambda f: f"{f['piso']} - {f['area']} ({f['total']} reportes)",
+    )
+    if not grupo:
+        return
+
+    detalle = consultar_detalle_piso_area(grupo["piso"], grupo["area"])
+    mensaje(f"\n{grupo['piso']} - {grupo['area']} ({len(detalle)} registros)")
+    imprimir_tabla(
+        ["Folio", "Fecha", "Lugar", "Estado"],
+        [[d["folio"], d["fecha_registro"], d["lugar"], d["nombre_estado"]] for d in detalle],
+        [13, 10, 28, 12],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1103,10 +1288,14 @@ def menu_consultas(sesion):
                 ("4", "Tecnicos asignados a una orden de trabajo"),
                 ("5", "Planes de mantenimiento preventivo por edificio"),
                 ("6", "Soluciones aplicadas y materiales utilizados"),
+                ("7", "Seguimiento de un reporte por folio"),
+                ("8", "Reportes pendientes y solucionados"),
+                ("9", "Materiales por reponer"),
+                ("10", "Reportes por piso y area"),
                 ("0", "Regresar"),
             ],
         )
-        op = pedir_opcion(["0", "1", "2", "3", "4", "5", "6"])
+        op = pedir_opcion([str(n) for n in range(11)])
         if op == "0":
             break
         if op == "1":
@@ -1121,6 +1310,14 @@ def menu_consultas(sesion):
             ejecutar_opcion(mostrar_consulta_planes, sesion)
         elif op == "6":
             ejecutar_opcion(mostrar_consulta_soluciones, sesion)
+        elif op == "7":
+            ejecutar_opcion(mostrar_consulta_seguimiento, sesion)
+        elif op == "8":
+            ejecutar_opcion(mostrar_consulta_reportes_estado, sesion)
+        elif op == "9":
+            ejecutar_opcion(mostrar_consulta_materiales_reponer, sesion)
+        elif op == "10":
+            ejecutar_opcion(mostrar_consulta_piso_area, sesion)
         pausar()
 
 

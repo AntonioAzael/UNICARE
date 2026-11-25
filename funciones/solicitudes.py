@@ -221,3 +221,188 @@ def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
         return filas
     finally:
         cnx.close()
+
+
+ORDEN_ESTADOS = "FIELD(r.nombre_estado, 'Pendiente', 'En revision', 'En proceso', 'Solucionado', 'Cancelado')"
+
+
+def listar_folios():
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT r.folio, r.fecha_registro, r.nombre_estado, {SQL_UBICACION} AS ubicacion
+            FROM reporte r
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            ORDER BY r.fecha_registro DESC, r.folio DESC
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def consultar_seguimiento_folio(folio):
+    # Consulta 7: Seguimiento de un reporte por folio (RF-03, RF-06)
+    # Reporte con su orden de trabajo vigente y su solucion; ambas pueden no existir (LEFT JOIN)
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT
+                r.folio,
+                r.fecha_registro,
+                CONCAT_WS(' ', u.nombre, u.primer_apellido, u.segundo_apellido) AS nombre_usuario,
+                {SQL_UBICACION} AS ubicacion,
+                COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                COALESCE(r.nombre_categoria, 'Sin clasificar') AS nombre_categoria,
+                COALESCE(r.nombre_prioridad, 'Sin asignar') AS nombre_prioridad,
+                r.nombre_estado,
+                r.descripcion_reporte,
+                r.observaciones,
+                m.clave_mantenimiento,
+                m.nombre_estado AS estado_orden,
+                m.fecha_programada,
+                s.fecha_resolucion,
+                s.solucion_aplicada
+            FROM reporte r
+            INNER JOIN usuario u ON u.numero_cuenta = r.numero_cuenta
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
+            LEFT JOIN mantenimiento m ON m.folio = r.folio AND m.nombre_estado <> 'Cancelado'
+            LEFT JOIN solucion s ON s.folio = r.folio
+            WHERE r.folio = %s
+            """,
+            (folio,),
+        )
+        reporte = cursor.fetchone()
+        if not reporte:
+            cursor.close()
+            raise ValueError(f"No existe el reporte {folio}.")
+
+        tecnicos = []
+        if reporte["clave_mantenimiento"]:
+            cursor.execute(
+                """
+                SELECT CONCAT_WS(' ', t.nombre, t.primer_apellido, t.segundo_apellido) AS nombre_tecnico,
+                       t.especialidad, mt.horas_asignadas, mt.actividad_asignada
+                FROM mantenimiento_trabajador mt
+                INNER JOIN trabajador_mantenimiento t ON t.numero_empleado = mt.numero_empleado
+                WHERE mt.clave_mantenimiento = %s
+                ORDER BY t.numero_empleado
+                """,
+                (reporte["clave_mantenimiento"],),
+            )
+            tecnicos = cursor.fetchall()
+        cursor.close()
+        reporte["tecnicos"] = tecnicos
+        return reporte
+    finally:
+        cnx.close()
+
+
+def resumen_reportes_por_estado():
+    # Consulta 8 (resumen): numero de reportes por estado (COUNT + GROUP BY).
+    # Se parte del catalogo de estados para que aparezcan tambien los que tienen 0.
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT es.nombre_estado, COUNT(r.folio) AS total
+            FROM estado es
+            LEFT JOIN reporte r ON r.nombre_estado = es.nombre_estado
+            GROUP BY es.nombre_estado
+            ORDER BY FIELD(es.nombre_estado, 'Pendiente', 'En revision', 'En proceso', 'Solucionado', 'Cancelado')
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def consultar_reportes_por_estado(nombre_estado=None):
+    # Consulta 8 (detalle): reportes pendientes y solucionados con los dias que llevan abiertos.
+    # Si el reporte ya tiene solucion, los dias se cuentan hasta la fecha de resolucion.
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        sql = f"""
+            SELECT
+                r.folio,
+                r.fecha_registro,
+                {SQL_UBICACION} AS ubicacion,
+                COALESCE(r.nombre_categoria, 'Sin clasificar') AS nombre_categoria,
+                COALESCE(r.nombre_prioridad, 'Sin asignar') AS nombre_prioridad,
+                r.nombre_estado,
+                DATEDIFF(COALESCE(s.fecha_resolucion, CURDATE()), r.fecha_registro) AS dias_abiertos
+            FROM reporte r
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            LEFT JOIN solucion s ON s.folio = r.folio
+        """
+        params = []
+        if nombre_estado:
+            sql += " WHERE r.nombre_estado = %s"
+            params.append(nombre_estado)
+        sql += f" ORDER BY {ORDEN_ESTADOS}, dias_abiertos DESC, r.folio"
+        cursor.execute(sql, tuple(params))
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def consultar_reportes_piso_area():
+    # Consulta 10: numero de reportes por piso y area, con una columna por estado.
+    # El total incluye todos los estados (tambien Cancelado).
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT
+                r.piso,
+                r.area,
+                COUNT(CASE WHEN r.nombre_estado = 'Pendiente' THEN 1 END) AS pendiente,
+                COUNT(CASE WHEN r.nombre_estado = 'En revision' THEN 1 END) AS en_revision,
+                COUNT(CASE WHEN r.nombre_estado = 'En proceso' THEN 1 END) AS en_proceso,
+                COUNT(CASE WHEN r.nombre_estado = 'Solucionado' THEN 1 END) AS solucionado,
+                COUNT(*) AS total
+            FROM reporte r
+            GROUP BY r.piso, r.area
+            ORDER BY FIELD(r.piso, 'Planta baja', 'Planta alta'), r.area
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def consultar_detalle_piso_area(piso, area):
+    # Consulta 10 (detalle): reportes de un piso y un area
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT folio, fecha_registro, lugar, nombre_estado
+            FROM reporte
+            WHERE piso = %s AND area = %s
+            ORDER BY fecha_registro DESC, folio DESC
+            """,
+            (piso, area),
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()

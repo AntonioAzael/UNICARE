@@ -182,3 +182,33 @@ def registrar_material_tomado(numero_solucion, codigo_material, cantidad):
         raise
     finally:
         cnx.close()
+
+
+def consultar_materiales_por_reponer():
+    # Consulta 9: Materiales por reponer (RF-10): existencia en o bajo el stock minimo,
+    # con el total usado en soluciones y en cuantas soluciones se uso (LEFT JOIN + GROUP BY)
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT
+                m.codigo_material,
+                m.nombre_material,
+                m.existencia,
+                m.stock_minimo,
+                m.stock_minimo - m.existencia AS faltante,
+                COALESCE(SUM(sm.cantidad_usada), 0) AS total_usado,
+                COUNT(sm.numero_solucion) AS soluciones
+            FROM material m
+            LEFT JOIN solucion_material sm ON sm.codigo_material = m.codigo_material
+            WHERE m.existencia <= m.stock_minimo
+            GROUP BY m.codigo_material, m.nombre_material, m.existencia, m.stock_minimo
+            ORDER BY faltante DESC, m.nombre_material
+            """
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
