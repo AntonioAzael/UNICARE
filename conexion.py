@@ -61,7 +61,8 @@ _esquema_verificado = False
 def esquema_actualizado():
     # El esquema nuevo tiene la tabla "estado" y la tabla intermedia "solucion_material".
     # Si la base viene de la version anterior (estado_reporte, orden_trabajo...), se recrea.
-    # Tambien se recrea si REPORTE aun no tiene la ubicacion por piso, area y lugar.
+    # Tambien se recrea si REPORTE aun no tiene la ubicacion por piso, area y lugar, o si todavia
+    # liga el equipo de inventario (codigo_inventario) en lugar del equipo afectado escrito.
     cnx = mysql.connector.connect(**DB_CONFIG)
     try:
         cursor = cnx.cursor()
@@ -72,14 +73,14 @@ def esquema_actualizado():
             return False
         cursor.execute(
             """
-            SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'reporte' AND COLUMN_NAME = 'piso'
+            SELECT COLUMN_NAME FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'reporte'
             """,
             (DB_CONFIG["database"],),
         )
-        tiene_piso = cursor.fetchone()[0] > 0
+        columnas = {fila[0] for fila in cursor.fetchall()}
         cursor.close()
-        return tiene_piso
+        return {"piso", "equipo_afectado"}.issubset(columnas) and "codigo_inventario" not in columnas
     finally:
         cnx.close()
 

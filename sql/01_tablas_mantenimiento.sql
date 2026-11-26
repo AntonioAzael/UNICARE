@@ -87,8 +87,9 @@ CREATE TABLE equipo_instalacion (
     FOREIGN KEY (clave_edificio) REFERENCES edificio(clave_edificio)
 );
 
--- El solicitante captura la ubicacion (piso, area y lugar dentro de Docencia 1) y la descripcion.
--- Categoria, prioridad y equipo los asigna mantenimiento al crear la orden de trabajo (por eso NULL).
+-- El solicitante captura la ubicacion (piso, area y lugar dentro de Docencia 1), el equipo afectado
+-- con sus palabras (opcional) y la descripcion. Categoria y prioridad las asigna el supervisor al crear
+-- la orden de trabajo (por eso NULL).
 CREATE TABLE reporte (
     folio VARCHAR(15) PRIMARY KEY,
     descripcion_reporte VARCHAR(250) NOT NULL,
@@ -102,13 +103,12 @@ CREATE TABLE reporte (
     nombre_estado VARCHAR(20) NOT NULL,
     nombre_categoria VARCHAR(25) NULL,
     nombre_prioridad VARCHAR(15) NULL,
-    codigo_inventario VARCHAR(15) NULL,
+    equipo_afectado VARCHAR(80) NULL,
     FOREIGN KEY (numero_cuenta) REFERENCES usuario(numero_cuenta),
     FOREIGN KEY (clave_edificio) REFERENCES edificio(clave_edificio),
     FOREIGN KEY (nombre_estado) REFERENCES estado(nombre_estado),
     FOREIGN KEY (nombre_categoria) REFERENCES categoria(nombre_categoria),
-    FOREIGN KEY (nombre_prioridad) REFERENCES prioridad(nombre_prioridad),
-    FOREIGN KEY (codigo_inventario) REFERENCES equipo_instalacion(codigo_inventario)
+    FOREIGN KEY (nombre_prioridad) REFERENCES prioridad(nombre_prioridad)
 );
 
 -- REPORTE 1:1 SOLUCION (folio UNIQUE)

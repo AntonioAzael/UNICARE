@@ -9,24 +9,35 @@ DOMINIO_CORREO = "@ut-tijuana.edu.mx"
 # Ubicacion de una solicitud: el sistema atiende solo el edificio Docencia 1
 EDIFICIO_SISTEMA = "ED-DOC1"
 PISOS = ("Planta baja", "Planta alta")
+AREA_OTRA = "Otra area"
 AREAS_POR_PISO = {
-    "Planta baja": ("Salones", "Oficinas/Cubiculos", "Laboratorios", "Banos", "Rack de servidores"),
-    "Planta alta": ("Salones", "Oficinas/Cubiculos", "Laboratorios"),
+    "Planta baja": ("Salones", "Oficinas/Cubiculos", "Laboratorios", "Banos", "Rack de servidores", AREA_OTRA),
+    "Planta alta": ("Salones", "Oficinas/Cubiculos", "Laboratorios", AREA_OTRA),
 }
-# Areas donde el solicitante escribe el lugar con sus palabras (con un ejemplo)
+# Ejemplo que se muestra al escribir el lugar en cada area
 EJEMPLOS_LUGAR = {
     "Salones": "Salon 104",
     "Oficinas/Cubiculos": "Cubiculo 3",
     "Laboratorios": "Laboratorio de Redes",
+    AREA_OTRA: "Frente a la escalera",
 }
 AREA_BANOS = "Banos"
 LUGARES_BANO = ("Bano de hombres", "Bano de mujeres")
 AREA_RACK = "Rack de servidores"
+MAX_AREA = 30
 MAX_LUGAR = 60
+MAX_EQUIPO_AFECTADO = 80
 MAX_DESCRIPCION = 250
 
 # Ubicacion completa de un reporte: "<edificio>, <piso>, <area>, <lugar>"
 SQL_UBICACION = "CONCAT_WS(', ', ed.nombre_edificio, r.piso, r.area, r.lugar)"
+# Equipo afectado escrito por el solicitante; "No indicado" si lo dejo vacio
+SQL_EQUIPO_AFECTADO = "COALESCE(NULLIF(r.equipo_afectado, ''), 'No indicado')"
+
+
+def normalizar_folio(folio):
+    # El usuario puede escribir el folio en minusculas o con espacios
+    return (folio or "").strip().upper()
 
 
 def listar_usuarios():
@@ -85,20 +96,8 @@ def listar_catalogos_solicitud():
 
         cursor.execute("SELECT nombre_prioridad, descripcion_prioridad FROM prioridad ORDER BY nivel_urgencia")
         prioridades = cursor.fetchall()
-
-        cursor.execute(
-            """
-            SELECT e.codigo_inventario, e.nombre_equipo, ed.nombre_edificio, e.piso, e.salon, e.area
-            FROM equipo_instalacion e
-            INNER JOIN edificio ed ON ed.clave_edificio = e.clave_edificio
-            WHERE e.clave_edificio = %s
-            ORDER BY e.piso, e.area, e.salon
-            """,
-            (EDIFICIO_SISTEMA,),
-        )
-        equipos = cursor.fetchall()
         cursor.close()
-        return {"categorias": categorias, "prioridades": prioridades, "equipos": equipos}
+        return {"categorias": categorias, "prioridades": prioridades}
     finally:
         cnx.close()
 
@@ -216,13 +215,24 @@ def _siguiente_folio(cursor, anio):
     return f"{prefijo}{numero:04d}"
 
 
-def registrar_solicitud(numero_cuenta, piso, area, lugar, descripcion_reporte):
-    # Registro 1: el solicitante indica la ubicacion y describe el problema.
-    # Categoria, prioridad y equipo quedan en NULL; los asigna mantenimiento en la orden de trabajo.
+def registrar_solicitud(numero_cuenta, piso, area, lugar, descripcion_reporte, equipo_afectado=None):
+    # Registro 1: el solicitante indica la ubicacion, el equipo afectado (opcional) y describe el problema.
+    # Categoria y prioridad quedan en NULL; las asigna el supervisor al crear la orden de trabajo.
     if piso not in PISOS:
         raise ValueError("El piso elegido no es valido.")
-    if area not in AREAS_POR_PISO[piso]:
+    area = (area or "").strip()
+    areas_fijas = {a for areas in AREAS_POR_PISO.values() for a in areas if a != AREA_OTRA}
+    if area in areas_fijas and area not in AREAS_POR_PISO[piso]:
         raise ValueError(f"El area {area} no existe en {piso}.")
+    if area not in AREAS_POR_PISO[piso] or area == AREA_OTRA:
+        # Un area que no esta en la lista es la que escribio el solicitante en "Otra area"
+        if not area or area == AREA_OTRA:
+            raise ValueError("Escribe el nombre del area.")
+        if len(area) > MAX_AREA:
+            raise ValueError(f"El area no puede pasar de {MAX_AREA} caracteres.")
+    equipo = (equipo_afectado or "").strip() or None
+    if equipo and len(equipo) > MAX_EQUIPO_AFECTADO:
+        raise ValueError(f"El equipo afectado no puede pasar de {MAX_EQUIPO_AFECTADO} caracteres.")
     if area == AREA_RACK:
         lugar = AREA_RACK
     elif area == AREA_BANOS:
@@ -251,10 +261,10 @@ def registrar_solicitud(numero_cuenta, piso, area, lugar, descripcion_reporte):
             """
             INSERT INTO reporte (
                 folio, descripcion_reporte, observaciones, fecha_registro, piso, area, lugar,
-                numero_cuenta, clave_edificio, nombre_estado, nombre_categoria, nombre_prioridad, codigo_inventario
-            ) VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, 'Pendiente', NULL, NULL, NULL)
+                numero_cuenta, clave_edificio, nombre_estado, nombre_categoria, nombre_prioridad, equipo_afectado
+            ) VALUES (%s, %s, NULL, %s, %s, %s, %s, %s, %s, 'Pendiente', NULL, NULL, %s)
             """,
-            (folio, descripcion, fecha, piso, area, lugar, numero_cuenta, EDIFICIO_SISTEMA),
+            (folio, descripcion, fecha, piso, area, lugar, numero_cuenta, EDIFICIO_SISTEMA, equipo),
         )
         cnx.commit()
         cursor.close()
@@ -289,14 +299,14 @@ def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        # Categoria, prioridad y equipo pueden faltar mientras mantenimiento no los asigne (LEFT JOIN)
+        # Categoria y prioridad pueden faltar mientras el supervisor no las asigne (LEFT JOIN)
         sql = f"""
             SELECT
                 r.fecha_registro,
                 r.folio,
                 CONCAT_WS(' ', u.nombre, u.primer_apellido, u.segundo_apellido) AS nombre_usuario,
                 {SQL_UBICACION} AS ubicacion,
-                COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                {SQL_EQUIPO_AFECTADO} AS equipo_afectado,
                 COALESCE(c.descripcion_categoria, 'Sin clasificar') AS descripcion_categoria,
                 COALESCE(r.nombre_prioridad, 'Sin asignar') AS nombre_prioridad,
                 r.descripcion_reporte,
@@ -306,7 +316,6 @@ def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
             INNER JOIN usuario u ON u.numero_cuenta = r.numero_cuenta
             INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
             INNER JOIN estado es ON es.nombre_estado = r.nombre_estado
-            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             LEFT JOIN categoria c ON c.nombre_categoria = r.nombre_categoria
             WHERE r.fecha_registro = %s
         """
@@ -326,18 +335,22 @@ def consultar_solicitudes_por_fecha(fecha_consulta, numero_cuenta=None):
 ORDEN_ESTADOS = "FIELD(r.nombre_estado, 'Pendiente', 'En revision', 'En proceso', 'Solucionado', 'Cancelado')"
 
 
-def listar_folios():
+def listar_folios(numero_cuenta=None):
+    # Folios que se muestran como ayuda al escribir un folio; para un solicitante, solo los suyos
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        cursor.execute(
-            f"""
+        sql = f"""
             SELECT r.folio, r.fecha_registro, r.nombre_estado, {SQL_UBICACION} AS ubicacion
             FROM reporte r
             INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
-            ORDER BY r.fecha_registro DESC, r.folio DESC
-            """
-        )
+        """
+        params = []
+        if numero_cuenta is not None:
+            sql += " WHERE r.numero_cuenta = %s"
+            params.append(numero_cuenta)
+        sql += " ORDER BY r.fecha_registro DESC, r.folio DESC"
+        cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
         return filas
@@ -345,9 +358,13 @@ def listar_folios():
         cnx.close()
 
 
-def consultar_seguimiento_folio(folio):
-    # Consulta 7: Seguimiento de un reporte por folio (RF-03, RF-06)
-    # Reporte con su orden de trabajo vigente y su solucion; ambas pueden no existir (LEFT JOIN)
+def consultar_seguimiento_folio(folio, numero_cuenta=None):
+    # Consulta 7: Seguimiento de un reporte por folio (RF-03, RF-06).
+    # Reporte con su orden de trabajo vigente y su solucion; ambas pueden no existir (LEFT JOIN).
+    # Con numero_cuenta (seguimiento del solicitante) el folio debe ser de esa cuenta.
+    folio = normalizar_folio(folio)
+    if not folio:
+        raise ValueError("Escribe un folio.")
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
@@ -355,10 +372,11 @@ def consultar_seguimiento_folio(folio):
             f"""
             SELECT
                 r.folio,
+                r.numero_cuenta,
                 r.fecha_registro,
                 CONCAT_WS(' ', u.nombre, u.primer_apellido, u.segundo_apellido) AS nombre_usuario,
                 {SQL_UBICACION} AS ubicacion,
-                COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                {SQL_EQUIPO_AFECTADO} AS equipo_afectado,
                 COALESCE(r.nombre_categoria, 'Sin clasificar') AS nombre_categoria,
                 COALESCE(r.nombre_prioridad, 'Sin asignar') AS nombre_prioridad,
                 r.nombre_estado,
@@ -372,7 +390,6 @@ def consultar_seguimiento_folio(folio):
             FROM reporte r
             INNER JOIN usuario u ON u.numero_cuenta = r.numero_cuenta
             INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
-            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
             LEFT JOIN mantenimiento m ON m.folio = r.folio AND m.nombre_estado <> 'Cancelado'
             LEFT JOIN solucion s ON s.folio = r.folio
             WHERE r.folio = %s
@@ -383,6 +400,9 @@ def consultar_seguimiento_folio(folio):
         if not reporte:
             cursor.close()
             raise ValueError(f"No existe el reporte {folio}.")
+        if numero_cuenta is not None and reporte["numero_cuenta"] != numero_cuenta:
+            cursor.close()
+            raise ValueError(f"El folio {folio} no corresponde a una de tus solicitudes.")
 
         tecnicos = []
         if reporte["clave_mantenimiento"]:
@@ -401,6 +421,83 @@ def consultar_seguimiento_folio(folio):
         cursor.close()
         reporte["tecnicos"] = tecnicos
         return reporte
+    finally:
+        cnx.close()
+
+
+def listar_mis_solicitudes(numero_cuenta):
+    # Todas las solicitudes de un solicitante, de la mas reciente a la mas antigua
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT r.folio, r.fecha_registro, {SQL_UBICACION} AS ubicacion,
+                   {SQL_EQUIPO_AFECTADO} AS equipo_afectado, r.nombre_estado
+            FROM reporte r
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            WHERE r.numero_cuenta = %s
+            ORDER BY r.fecha_registro DESC, r.folio DESC
+            """,
+            (numero_cuenta,),
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def listar_solicitudes_cancelables(numero_cuenta):
+    # Solo las solicitudes del solicitante que siguen Pendiente
+    cnx = conectar()
+    try:
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT r.folio, r.fecha_registro, {SQL_UBICACION} AS ubicacion,
+                   {SQL_EQUIPO_AFECTADO} AS equipo_afectado, r.descripcion_reporte
+            FROM reporte r
+            INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
+            WHERE r.numero_cuenta = %s AND r.nombre_estado = 'Pendiente'
+            ORDER BY r.fecha_registro DESC, r.folio DESC
+            """,
+            (numero_cuenta,),
+        )
+        filas = cursor.fetchall()
+        cursor.close()
+        return filas
+    finally:
+        cnx.close()
+
+
+def cancelar_solicitud(folio, numero_cuenta):
+    # El solicitante cancela una solicitud suya; solo se permite desde Pendiente
+    folio = normalizar_folio(folio)
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT numero_cuenta, nombre_estado FROM reporte WHERE folio = %s FOR UPDATE",
+            (folio,),
+        )
+        rep = cursor.fetchone()
+        if not rep:
+            raise ValueError(f"No existe el reporte {folio}.")
+        if rep["numero_cuenta"] != numero_cuenta:
+            raise ValueError(f"El folio {folio} no corresponde a una de tus solicitudes.")
+        if rep["nombre_estado"] != "Pendiente":
+            raise ValueError(
+                f"La solicitud {folio} esta en estado {rep['nombre_estado']}; solo se puede cancelar si esta Pendiente."
+            )
+        cursor.execute("UPDATE reporte SET nombre_estado = 'Cancelado' WHERE folio = %s", (folio,))
+        cnx.commit()
+        cursor.close()
+        return folio
+    except Exception:
+        cnx.rollback()
+        raise
     finally:
         cnx.close()
 

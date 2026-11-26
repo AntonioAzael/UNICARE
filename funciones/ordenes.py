@@ -1,26 +1,25 @@
 from datetime import date
 from conexion import conectar
-from funciones.solicitudes import SQL_UBICACION
+from funciones.solicitudes import SQL_EQUIPO_AFECTADO, SQL_UBICACION, normalizar_folio
 
 # Nota: "orden de trabajo" es la entidad MANTENIMIENTO del DER (clave_mantenimiento).
 
 
 def listar_solicitudes_disponibles():
+    # Solicitudes a las que se les puede crear una orden: Pendiente y sin orden vigente
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
         cursor.execute(
             f"""
             SELECT r.folio, r.fecha_registro, r.nombre_estado, r.descripcion_reporte,
-                   r.nombre_categoria, r.nombre_prioridad, r.codigo_inventario, r.observaciones,
-                   COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
+                   r.nombre_categoria, r.nombre_prioridad, r.observaciones,
+                   {SQL_EQUIPO_AFECTADO} AS equipo_afectado,
                    ed.nombre_edificio,
                    {SQL_UBICACION} AS ubicacion
             FROM reporte r
             INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
-            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            WHERE r.nombre_estado NOT IN ('Solucionado', 'Cancelado')
-              -- Oculta los reportes que ya tienen una orden de trabajo vigente (no cancelada)
+            WHERE r.nombre_estado = 'Pendiente'
               AND NOT EXISTS (
                   SELECT 1 FROM mantenimiento m
                   WHERE m.folio = r.folio AND m.nombre_estado <> 'Cancelado'
@@ -159,21 +158,38 @@ def eliminar_tipo_mantenimiento(codigo_tipo):
         cnx.close()
 
 
-def listar_ordenes():
+def listar_ordenes(estados=None, numero_empleado=None, min_tecnicos=0):
+    # Ordenes de trabajo con su ubicacion, equipo afectado y numero de tecnicos.
+    # estados: solo esos estados; numero_empleado: solo donde ese tecnico esta asignado;
+    # min_tecnicos: solo las que tienen al menos esa cantidad de tecnicos.
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        cursor.execute(
-            """
+        sql = f"""
             SELECT m.clave_mantenimiento, m.folio, m.nombre_estado, m.fecha_programada,
-                   ed.nombre_edificio, COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo
+                   ed.nombre_edificio, {SQL_UBICACION} AS ubicacion,
+                   {SQL_EQUIPO_AFECTADO} AS equipo_afectado,
+                   (SELECT COUNT(*) FROM mantenimiento_trabajador mt
+                    WHERE mt.clave_mantenimiento = m.clave_mantenimiento) AS tecnicos
             FROM mantenimiento m
             INNER JOIN reporte r ON r.folio = m.folio
             INNER JOIN edificio ed ON ed.clave_edificio = r.clave_edificio
-            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC
-            """
-        )
+            WHERE 1 = 1
+        """
+        params = []
+        if estados:
+            sql += " AND m.nombre_estado IN (" + ", ".join(["%s"] * len(estados)) + ")"
+            params.extend(estados)
+        if numero_empleado is not None:
+            sql += (" AND EXISTS (SELECT 1 FROM mantenimiento_trabajador mt2"
+                    " WHERE mt2.clave_mantenimiento = m.clave_mantenimiento AND mt2.numero_empleado = %s)")
+            params.append(numero_empleado)
+        if min_tecnicos:
+            sql += (" AND (SELECT COUNT(*) FROM mantenimiento_trabajador mt3"
+                    " WHERE mt3.clave_mantenimiento = m.clave_mantenimiento) >= %s")
+            params.append(min_tecnicos)
+        sql += " ORDER BY m.fecha_creacion DESC, m.clave_mantenimiento DESC"
+        cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
         return filas
@@ -181,24 +197,64 @@ def listar_ordenes():
         cnx.close()
 
 
-def listar_tecnicos():
+def listar_mis_ordenes(numero_empleado):
+    # Ordenes donde el tecnico esta asignado (opcion "Mis ordenes asignadas")
+    return listar_ordenes(numero_empleado=numero_empleado)
+
+
+def listar_tecnicos(excluir_orden=None):
+    # Tecnicos para asignar; con excluir_orden no aparecen los que ya estan en esa orden
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        cursor.execute(
-            """
+        sql = """
             SELECT numero_empleado,
                    CONCAT_WS(' ', nombre, primer_apellido, segundo_apellido) AS nombre_completo,
                    especialidad
             FROM trabajador_mantenimiento
-            ORDER BY numero_empleado
-            """
-        )
+        """
+        params = []
+        if excluir_orden:
+            sql += (" WHERE numero_empleado NOT IN (SELECT numero_empleado FROM mantenimiento_trabajador"
+                    " WHERE clave_mantenimiento = %s)")
+            params.append(excluir_orden)
+        sql += " ORDER BY numero_empleado"
+        cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
         return filas
     finally:
         cnx.close()
+
+
+def _orden_bloqueada(cursor, clave_mantenimiento):
+    # Lee la orden y la bloquea hasta el fin de la transaccion
+    cursor.execute(
+        "SELECT clave_mantenimiento, folio, nombre_estado FROM mantenimiento WHERE clave_mantenimiento = %s FOR UPDATE",
+        (clave_mantenimiento,),
+    )
+    orden = cursor.fetchone()
+    if not orden:
+        raise ValueError(f"No existe la orden de trabajo {clave_mantenimiento}.")
+    return orden
+
+
+def _contar_tecnicos(cursor, clave_mantenimiento):
+    cursor.execute(
+        "SELECT COUNT(*) AS total FROM mantenimiento_trabajador WHERE clave_mantenimiento = %s",
+        (clave_mantenimiento,),
+    )
+    return cursor.fetchone()["total"]
+
+
+def verificar_asignado(cursor, clave_mantenimiento, numero_empleado):
+    # Un tecnico solo puede registrar en las ordenes donde esta asignado
+    cursor.execute(
+        "SELECT 1 FROM mantenimiento_trabajador WHERE clave_mantenimiento = %s AND numero_empleado = %s",
+        (clave_mantenimiento, numero_empleado),
+    )
+    if not cursor.fetchone():
+        raise ValueError(f"No estas asignado a la orden de trabajo {clave_mantenimiento}.")
 
 
 def _siguiente_clave(cursor, anio):
@@ -224,15 +280,17 @@ def registrar_orden_trabajo(
     costo_materiales=0.0,
     nombre_categoria=None,
     nombre_prioridad=None,
-    codigo_inventario=None,
     observaciones_reporte=None,
 ):
-    # Registro 2: Registrar la orden de trabajo (mantenimiento) de una solicitud.
-    # En la misma transaccion mantenimiento completa en el reporte la categoria, la prioridad
-    # y las observaciones (si aun no las tiene) y, opcionalmente, liga el equipo afectado.
+    # Registro 2 (supervisor): orden de trabajo de una solicitud Pendiente.
+    # En la misma transaccion el supervisor asigna al reporte la categoria y la prioridad,
+    # guarda las observaciones del reporte si no tenia y el reporte pasa a En revision.
+    folio = normalizar_folio(folio)
     descripcion = descripcion_trabajo.strip()
     if not descripcion:
         raise ValueError("La descripcion del trabajo no puede ir vacia.")
+    if not nombre_categoria or not nombre_prioridad:
+        raise ValueError("Debes asignar la categoria y la prioridad de la solicitud.")
     obs_reporte = observaciones_reporte.strip() if observaciones_reporte and observaciones_reporte.strip() else None
     if obs_reporte and len(obs_reporte) > 250:
         raise ValueError("Las observaciones del reporte no pueden pasar de 250 caracteres.")
@@ -243,7 +301,14 @@ def registrar_orden_trabajo(
     try:
         cnx.start_transaction()
         cursor = cnx.cursor(dictionary=True)
-        # Respaldo del filtro de listar_solicitudes_disponibles: una orden vigente por reporte
+        cursor.execute("SELECT nombre_estado FROM reporte WHERE folio = %s FOR UPDATE", (folio,))
+        rep = cursor.fetchone()
+        if not rep:
+            raise ValueError(f"No existe el reporte {folio}.")
+        if rep["nombre_estado"] != "Pendiente":
+            raise ValueError(
+                f"La solicitud {folio} esta en estado {rep['nombre_estado']}; solo se crea orden a solicitudes Pendiente."
+            )
         cursor.execute(
             "SELECT clave_mantenimiento FROM mantenimiento WHERE folio = %s AND nombre_estado <> 'Cancelado'",
             (folio,),
@@ -255,31 +320,16 @@ def registrar_orden_trabajo(
             )
 
         cursor.execute(
-            "SELECT nombre_categoria, nombre_prioridad, codigo_inventario FROM reporte WHERE folio = %s",
-            (folio,),
-        )
-        rep = cursor.fetchone()
-        if not rep:
-            raise ValueError(f"La solicitud {folio} ya no existe.")
-        if not (rep["nombre_categoria"] or nombre_categoria) or not (rep["nombre_prioridad"] or nombre_prioridad):
-            raise ValueError("Debes asignar la categoria y la prioridad de la solicitud.")
-        # Solo se llenan los datos que faltan; lo que ya tenia el reporte se conserva
-        cursor.execute(
             """
             UPDATE reporte
-            SET nombre_categoria = COALESCE(nombre_categoria, %s),
-                nombre_prioridad = COALESCE(nombre_prioridad, %s),
-                codigo_inventario = COALESCE(codigo_inventario, %s),
-                observaciones = COALESCE(observaciones, %s)
+            SET nombre_categoria = %s,
+                nombre_prioridad = %s,
+                observaciones = COALESCE(observaciones, %s),
+                nombre_estado = 'En revision'
             WHERE folio = %s
             """,
-            (nombre_categoria, nombre_prioridad, codigo_inventario, obs_reporte, folio),
+            (nombre_categoria, nombre_prioridad, obs_reporte, folio),
         )
-        if codigo_inventario and not rep["codigo_inventario"]:
-            cursor.execute(
-                "UPDATE equipo_instalacion SET necesita_reparacion = 1 WHERE codigo_inventario = %s",
-                (codigo_inventario,),
-            )
 
         clave = _siguiente_clave(cursor, hoy.year)
         cursor.execute(
@@ -293,10 +343,6 @@ def registrar_orden_trabajo(
             (clave, hoy, fecha_programada, descripcion, obs, costo_mano_obra, costo_materiales,
              codigo_tipo, folio),
         )
-        cursor.execute(
-            "UPDATE reporte SET nombre_estado = 'En revision' WHERE folio = %s AND nombre_estado = 'Pendiente'",
-            (folio,),
-        )
         cnx.commit()
         cursor.close()
         return clave
@@ -308,48 +354,45 @@ def registrar_orden_trabajo(
 
 
 def asignar_tecnicos_orden(clave_mantenimiento, asignaciones):
-    # Registro 3: Asignar al menos 2 tecnicos a una orden de trabajo
-    if len(asignaciones) < 2:
-        raise ValueError("Debes asignar al menos 2 tecnicos a la orden de trabajo.")
+    # Registro 3 (supervisor): tecnicos de una orden Pendiente o En proceso.
+    # La orden debe quedar con al menos 2 tecnicos; la orden y el reporte pasan a En proceso.
+    if not asignaciones:
+        raise ValueError("Debes asignar al menos un tecnico.")
 
     hoy = date.today()
     cnx = conectar()
     try:
         cnx.start_transaction()
         cursor = cnx.cursor(dictionary=True)
+        orden = _orden_bloqueada(cursor, clave_mantenimiento)
+        if orden["nombre_estado"] not in ("Pendiente", "En proceso"):
+            raise ValueError(
+                f"La orden {clave_mantenimiento} esta en estado {orden['nombre_estado']}; "
+                "solo se asignan tecnicos a ordenes Pendiente o En proceso."
+            )
         for item in asignaciones:
             cursor.execute(
                 "SELECT 1 FROM mantenimiento_trabajador WHERE clave_mantenimiento = %s AND numero_empleado = %s",
                 (clave_mantenimiento, item["numero_empleado"]),
             )
             if cursor.fetchone():
-                cursor.execute(
-                    """
-                    UPDATE mantenimiento_trabajador
-                    SET fecha_asignacion = %s, horas_asignadas = %s, actividad_asignada = %s
-                    WHERE clave_mantenimiento = %s AND numero_empleado = %s
-                    """,
-                    (hoy, item["horas"], item["actividad"], clave_mantenimiento, item["numero_empleado"]),
-                )
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO mantenimiento_trabajador
-                        (clave_mantenimiento, numero_empleado, fecha_asignacion, horas_asignadas, actividad_asignada)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (clave_mantenimiento, item["numero_empleado"], hoy, item["horas"], item["actividad"]),
-                )
+                raise ValueError("Uno de los tecnicos ya estaba asignado a esta orden.")
+            cursor.execute(
+                """
+                INSERT INTO mantenimiento_trabajador
+                    (clave_mantenimiento, numero_empleado, fecha_asignacion, horas_asignadas, actividad_asignada)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (clave_mantenimiento, item["numero_empleado"], hoy, item["horas"], item["actividad"]),
+            )
+        if _contar_tecnicos(cursor, clave_mantenimiento) < 2:
+            raise ValueError("La orden de trabajo debe quedar con al menos 2 tecnicos asignados.")
         cursor.execute(
             "UPDATE mantenimiento SET nombre_estado = 'En proceso', fecha_inicio = COALESCE(fecha_inicio, %s) "
             "WHERE clave_mantenimiento = %s",
             (hoy, clave_mantenimiento),
         )
-        cursor.execute(
-            "UPDATE reporte SET nombre_estado = 'En proceso' "
-            "WHERE folio = (SELECT folio FROM mantenimiento WHERE clave_mantenimiento = %s)",
-            (clave_mantenimiento,),
-        )
+        cursor.execute("UPDATE reporte SET nombre_estado = 'En proceso' WHERE folio = %s", (orden["folio"],))
         cnx.commit()
         cursor.close()
     except Exception:
@@ -359,16 +402,27 @@ def asignar_tecnicos_orden(clave_mantenimiento, asignaciones):
         cnx.close()
 
 
-def registrar_actividades_orden(clave_mantenimiento, actividades, finalizar_orden=False):
-    # Registro 4: Registrar al menos dos actividades especificas de una orden de trabajo
-    # Cada actividad se guarda en HISTORIAL_MANTENIMIENTO
+def registrar_actividades_orden(clave_mantenimiento, actividades, numero_empleado=None, es_supervisor=False):
+    # Registro 4: al menos dos actividades en una orden En proceso con al menos 2 tecnicos.
+    # Un tecnico solo registra en ordenes donde esta asignado; el supervisor en cualquiera.
+    # Cada actividad se guarda en HISTORIAL_MANTENIMIENTO.
     if len(actividades) < 2:
         raise ValueError("Debes registrar al menos 2 actividades especificas en la orden de trabajo.")
 
     cnx = conectar()
     try:
         cnx.start_transaction()
-        cursor = cnx.cursor()
+        cursor = cnx.cursor(dictionary=True)
+        orden = _orden_bloqueada(cursor, clave_mantenimiento)
+        if orden["nombre_estado"] != "En proceso":
+            raise ValueError(
+                f"La orden {clave_mantenimiento} esta en estado {orden['nombre_estado']}; "
+                "solo se registran actividades en ordenes En proceso."
+            )
+        if _contar_tecnicos(cursor, clave_mantenimiento) < 2:
+            raise ValueError(f"La orden {clave_mantenimiento} necesita al menos 2 tecnicos asignados.")
+        if not es_supervisor:
+            verificar_asignado(cursor, clave_mantenimiento, numero_empleado)
         for act in actividades:
             cursor.execute(
                 """
@@ -378,20 +432,37 @@ def registrar_actividades_orden(clave_mantenimiento, actividades, finalizar_orde
                 """,
                 (act["fecha"], act["descripcion"], act["resultado"], clave_mantenimiento),
             )
-        if finalizar_orden:
-            hoy = date.today()
-            cursor.execute(
-                """
-                UPDATE mantenimiento
-                SET nombre_estado = 'Solucionado',
-                    fecha_inicio = COALESCE(fecha_inicio, %s),
-                    fecha_fin = %s
-                WHERE clave_mantenimiento = %s
-                """,
-                (hoy, hoy, clave_mantenimiento),
-            )
         cnx.commit()
         cursor.close()
+    except Exception:
+        cnx.rollback()
+        raise
+    finally:
+        cnx.close()
+
+
+def cancelar_orden(clave_mantenimiento):
+    # Supervisor: cancela una orden Pendiente o En proceso. El reporte regresa a Pendiente
+    # (conserva su categoria y prioridad) para que se le pueda crear otra orden.
+    hoy = date.today()
+    cnx = conectar()
+    try:
+        cnx.start_transaction()
+        cursor = cnx.cursor(dictionary=True)
+        orden = _orden_bloqueada(cursor, clave_mantenimiento)
+        if orden["nombre_estado"] not in ("Pendiente", "En proceso"):
+            raise ValueError(
+                f"La orden {clave_mantenimiento} esta en estado {orden['nombre_estado']}; "
+                "solo se cancelan ordenes Pendiente o En proceso."
+            )
+        cursor.execute(
+            "UPDATE mantenimiento SET nombre_estado = 'Cancelado', fecha_fin = %s WHERE clave_mantenimiento = %s",
+            (hoy, clave_mantenimiento),
+        )
+        cursor.execute("UPDATE reporte SET nombre_estado = 'Pendiente' WHERE folio = %s", (orden["folio"],))
+        cnx.commit()
+        cursor.close()
+        return orden["folio"]
     except Exception:
         cnx.rollback()
         raise

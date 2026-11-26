@@ -39,9 +39,11 @@ from funciones.ordenes import (
     listar_tipos_gestion,
     registrar_tipo_mantenimiento,
     asignar_tecnicos_orden,
+    cancelar_orden,
     consultar_actividades_orden,
     consultar_ordenes_edificio,
     consultar_tecnicos_orden,
+    listar_mis_ordenes,
     listar_ordenes,
     listar_solicitudes_disponibles,
     listar_tecnicos,
@@ -50,7 +52,10 @@ from funciones.ordenes import (
     registrar_orden_trabajo,
 )
 from funciones.planes import (
+    ESTADOS_PLAN,
+    FRECUENCIAS,
     MAX_CODIGO_EQUIPO,
+    MAX_FRECUENCIA,
     MAX_NOMBRE_EQUIPO,
     MAX_SALON,
     MAX_TIPO_EQUIPO,
@@ -59,8 +64,9 @@ from funciones.planes import (
     eliminar_equipo,
     existe_equipo,
     listar_edificios,
+    listar_areas_con_equipos,
     listar_equipos,
-    listar_equipos_por_edificio,
+    listar_equipos_por_piso_area,
     registrar_equipo,
     registrar_plan_preventivo,
     usos_equipo,
@@ -73,15 +79,19 @@ from funciones.soluciones import (
 )
 from funciones.solicitudes import (
     AREA_BANOS,
+    AREA_OTRA,
     AREA_RACK,
     AREAS_POR_PISO,
     EJEMPLOS_LUGAR,
     LUGARES_BANO,
+    MAX_AREA,
     MAX_DESCRIPCION,
     MAX_DESCRIPCION_CATALOGO,
+    MAX_EQUIPO_AFECTADO,
     MAX_LUGAR,
     MAX_NOMBRE_CATEGORIA,
     PISOS,
+    cancelar_solicitud,
     eliminar_categoria,
     existe_categoria,
     listar_categorias,
@@ -94,6 +104,8 @@ from funciones.solicitudes import (
     listar_catalogos_solicitud,
     listar_fechas_solicitudes,
     listar_folios,
+    listar_mis_solicitudes,
+    listar_solicitudes_cancelables,
     resumen_reportes_por_estado,
     registrar_solicitud,
     registrar_usuario,
@@ -183,7 +195,10 @@ def limpiar_pantalla(sesion=None):
         console.clear()
     mostrar_banner_unicare(console)
     if sesion:
-        rol_txt = "Mantenimiento" if sesion["rol"] == "mantenimiento" else "Solicitante"
+        if sesion["rol"] == "mantenimiento":
+            rol_txt = "Supervisor" if sesion.get("es_supervisor") else "Tecnico"
+        else:
+            rol_txt = "Solicitante"
         linea_sesion = Text()
         linea_sesion.append("Sesion: ", style="bold cyan")
         linea_sesion.append(sesion["nombre"])
@@ -219,6 +234,54 @@ def pedir_contrasena(etiqueta):
         if valor:
             return valor
         error("La contrasena no puede ir vacia.")
+
+
+def pedir_contrasena_nueva(etiqueta):
+    # Al crear una cuenta la contrasena se escribe dos veces
+    while True:
+        valor = pedir_contrasena(etiqueta)
+        if pedir_contrasena("Confirma la contrasena") == valor:
+            return valor
+        error("Las contrasenas no coinciden. Escribelas de nuevo.")
+
+
+def pedir_texto_opcional(etiqueta, maximo):
+    # Texto que se puede dejar vacio con Enter; respeta el largo maximo
+    while True:
+        valor = entrada(etiqueta)
+        if len(valor) <= maximo:
+            return valor or None
+        error(f"El texto no puede pasar de {maximo} caracteres (escribiste {len(valor)}).")
+
+
+def es_supervisor(sesion):
+    return bool(sesion.get("es_supervisor"))
+
+
+def filtrar_por_rol(sesion, opciones):
+    # opciones: lista de (texto, funcion, es_submenu, solo_supervisor).
+    # Un tecnico no ve las opciones de supervisor; las que quedan se numeran desde 1.
+    return [o for o in opciones if es_supervisor(sesion) or not o[3]]
+
+
+def ejecutar_menu(sesion, titulo_menu, opciones, texto_salir):
+    # Menu numerado con las opciones que le tocan al rol de la sesion
+    visibles = filtrar_por_rol(sesion, opciones)
+    while True:
+        limpiar_pantalla(sesion)
+        mostrar_menu(
+            titulo_menu,
+            [(str(i), o[0]) for i, o in enumerate(visibles, start=1)] + [("0", texto_salir)],
+        )
+        op = pedir_opcion([str(n) for n in range(len(visibles) + 1)])
+        if op == "0":
+            break
+        _, funcion, es_submenu, _ = visibles[int(op) - 1]
+        if es_submenu:
+            funcion(sesion)
+            continue
+        ejecutar_opcion(funcion, sesion)
+        pausar()
 
 
 def pedir_entero(etiqueta, defecto=None):
@@ -376,7 +439,7 @@ def flujo_registro_estudiante(sesion=None):
     correo = pedir_correo()
     if not correo:
         return None
-    contrasena = pedir_contrasena("Crea una contrasena")
+    contrasena = pedir_contrasena_nueva("Crea una contrasena")
 
     registrar_usuario("Estudiante", correo, contrasena, nombre, ap1, ap2 or None)
     exito(f"\nCuenta creada correctamente. Ya puedes iniciar sesion con {correo}.")
@@ -404,7 +467,7 @@ def flujo_registrar_personal(sesion):
         correo = pedir_correo()
         if not correo:
             return
-        contrasena = pedir_contrasena("Contrasena asignada")
+        contrasena = pedir_contrasena_nueva("Contrasena asignada")
         registrar_usuario(tipo, correo, contrasena, nombre, ap1, ap2 or None)
         exito(f"\n{tipo} registrado correctamente ({correo}).")
     else:
@@ -422,7 +485,7 @@ def flujo_registrar_personal(sesion):
             usuario_acc = entrada("Usuario de acceso", sugerido).lower()
         especialidad = pedir_texto("Especialidad")
         exp = pedir_entero("Anios de experiencia laboral", 1)
-        contrasena = pedir_contrasena("Contrasena asignada")
+        contrasena = pedir_contrasena_nueva("Contrasena asignada")
         # Un supervisor es un tecnico sin jefe (empleado_supervisor vacio)
         sera_supervisor = confirmar("Sera supervisor (tendra los mismos permisos que tu)?", False)
         usuario_creado = registrar_tecnico(
@@ -458,6 +521,10 @@ def flujo_registrar_solicitud(sesion):
     area = elegir_de_lista(f"Area de {piso}", list(AREAS_POR_PISO[piso]), lambda a: a)
     if not area:
         return
+    if area == AREA_OTRA:
+        area = pedir_texto_limitado("\nEscribe el area (ej. Pasillo principal) (0 para cancelar)", MAX_AREA)
+        if not area:
+            return
 
     if area == AREA_RACK:
         lugar = AREA_RACK
@@ -467,11 +534,15 @@ def flujo_registrar_solicitud(sesion):
         if not lugar:
             return
     else:
-        lugar = pedir_texto_limitado(
-            f"\nEscribe el lugar exacto (ej. {EJEMPLOS_LUGAR[area]}) (0 para cancelar)", MAX_LUGAR
-        )
+        ejemplo = EJEMPLOS_LUGAR.get(area, EJEMPLOS_LUGAR[AREA_OTRA])
+        lugar = pedir_texto_limitado(f"\nEscribe el lugar exacto (ej. {ejemplo}) (0 para cancelar)", MAX_LUGAR)
         if not lugar:
             return
+
+    equipo_afectado = pedir_texto_opcional(
+        "\nEquipo afectado (opcional, ej. Proyector, Contacto de la mesa 4; Enter para omitir)",
+        MAX_EQUIPO_AFECTADO,
+    )
 
     descripcion = pedir_texto_limitado(
         "\nDescribe el problema con tus propias palabras (0 para cancelar)", MAX_DESCRIPCION
@@ -479,10 +550,11 @@ def flujo_registrar_solicitud(sesion):
     if not descripcion:
         return
 
-    folio = registrar_solicitud(sesion["numero"], piso, area, lugar, descripcion)
+    folio = registrar_solicitud(sesion["numero"], piso, area, lugar, descripcion, equipo_afectado)
     exito(f"\nSolicitud registrada con numero {folio}.")
     mensaje(f"Ubicacion: Docencia 1, {piso}, {area}, {lugar}.")
-    mensaje("Mantenimiento asignara la categoria, la prioridad y el equipo afectado.")
+    mensaje(f"Equipo afectado: {equipo_afectado or 'No indicado'}.")
+    mensaje("Mantenimiento asignara la categoria y la prioridad al crear la orden de trabajo.")
 
 
 def mostrar_consulta_solicitudes(sesion, solo_mias=False):
@@ -517,7 +589,7 @@ def mostrar_consulta_solicitudes(sesion, solo_mias=False):
                 ("No. solicitud", r["folio"]),
                 ("Usuario", r["nombre_usuario"]),
                 ("Ubicacion", r["ubicacion"]),
-                ("Equipo afectado", r["nombre_equipo"]),
+                ("Equipo afectado", r["equipo_afectado"]),
                 ("Tipo de problema", r["descripcion_categoria"]),
                 ("Prioridad", r["nombre_prioridad"]),
                 ("Problema", r["descripcion_reporte"]),
@@ -525,6 +597,117 @@ def mostrar_consulta_solicitudes(sesion, solo_mias=False):
                 ("Observaciones", r["observaciones"] or "Sin observaciones"),
             ],
         )
+
+
+# ---------------------------------------------------------------------------
+# Solicitante: mis solicitudes, seguimiento y cancelacion
+# ---------------------------------------------------------------------------
+
+def mostrar_mis_solicitudes(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Mis solicitudes")
+    filas = listar_mis_solicitudes(sesion["numero"])
+    if not filas:
+        aviso("\nAun no tienes solicitudes registradas.")
+        return
+    mensaje(f"\nTus solicitudes ({len(filas)} registros)")
+    imprimir_tabla(
+        ["Folio", "Fecha", "Ubicacion", "Equipo afectado", "Estado"],
+        [[f["folio"], f["fecha_registro"], f["ubicacion"], f["equipo_afectado"], f["nombre_estado"]] for f in filas],
+        [13, 10, 40, 24, 11],
+    )
+
+
+def pedir_folio(numero_cuenta=None):
+    # El usuario escribe el folio; con Enter vacio se muestran los folios disponibles como ayuda
+    while True:
+        valor = entrada("\nEscribe el folio (ej. REP-2026-0004; Enter para ver la lista, 0 para cancelar)")
+        if valor == "0":
+            return None
+        if valor:
+            return valor.strip().upper()
+        folios = listar_folios(numero_cuenta)
+        if not folios:
+            aviso("No hay folios disponibles.")
+            return None
+        mensaje("\nFolios disponibles:")
+        imprimir_tabla(
+            ["Folio", "Fecha", "Ubicacion", "Estado"],
+            [[f["folio"], f["fecha_registro"], f["ubicacion"], f["nombre_estado"]] for f in folios],
+            [13, 10, 50, 11],
+        )
+
+
+def buscar_folio(numero_cuenta=None):
+    # Pide el folio hasta que exista (y, para un solicitante, que sea suyo)
+    while True:
+        folio = pedir_folio(numero_cuenta)
+        if not folio:
+            return None
+        try:
+            return consultar_seguimiento_folio(folio, numero_cuenta)
+        except ValueError as e:
+            error(str(e))
+
+
+def mostrar_seguimiento_mi_solicitud(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Seguimiento de mi solicitud")
+    r = buscar_folio(sesion["numero"])
+    if not r:
+        return
+    imprimir_ficha(
+        f"Solicitud {r['folio']}",
+        [
+            ("Folio", r["folio"]),
+            ("Fecha de registro", r["fecha_registro"]),
+            ("Ubicacion", r["ubicacion"]),
+            ("Equipo afectado", r["equipo_afectado"]),
+            ("Descripcion", r["descripcion_reporte"]),
+            ("Estado", r["nombre_estado"]),
+        ],
+    )
+    if r["clave_mantenimiento"]:
+        tecnicos = ", ".join(t["nombre_tecnico"] for t in r["tecnicos"]) or "Aun sin tecnicos"
+        imprimir_ficha(
+            "Atencion de mantenimiento",
+            [
+                ("Fecha programada", r["fecha_programada"]),
+                ("Tecnicos", tecnicos),
+            ],
+            color="yellow",
+        )
+    else:
+        imprimir_ficha("Atencion de mantenimiento", [("Fecha programada", "Aun sin orden de trabajo")], color="yellow")
+    if r["fecha_resolucion"]:
+        imprimir_ficha(
+            "Solucion",
+            [
+                ("Fecha de resolucion", r["fecha_resolucion"]),
+                ("Solucion aplicada", r["solucion_aplicada"]),
+            ],
+            color="green",
+        )
+    else:
+        imprimir_ficha("Solucion", [("Solucion", "Sin solucion")], color="green")
+
+
+def flujo_cancelar_solicitud(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Cancelar mi solicitud")
+    mensaje("Solo se pueden cancelar las solicitudes que siguen Pendiente.")
+    solicitud = elegir_de_lista(
+        "Solicitud a cancelar",
+        listar_solicitudes_cancelables(sesion["numero"]),
+        lambda s: f"{s['folio']} | {s['fecha_registro']} | {s['ubicacion']} | {s['descripcion_reporte']}",
+    )
+    if not solicitud:
+        return
+    if not confirmar(f"Confirmas cancelar la solicitud {solicitud['folio']}? No se puede deshacer", False):
+        aviso("Operacion cancelada.")
+        return
+    folio = cancelar_solicitud(solicitud["folio"], sesion["numero"])
+    exito(f"\nLa solicitud {folio} quedo Cancelada.")
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +727,7 @@ def mostrar_consulta_actividades(sesion):
     elegida = elegir_orden_opcional(
         sesion,
         "Filtrar por una orden de trabajo especifica?",
-        lambda o: f"{o['clave_mantenimiento']} | {o['folio']} | {o['nombre_equipo']}",
+        lambda o: f"{o['clave_mantenimiento']} | {o['folio']} | {o['equipo_afectado']}",
     )
     if elegida == "cancelar":
         return
@@ -677,70 +860,47 @@ def mostrar_consulta_planes(sesion):
 # Registros 2, 3, 4 y 5: personal de mantenimiento
 # ---------------------------------------------------------------------------
 
+def formato_orden(o):
+    return f"{o['clave_mantenimiento']} | {o['folio']} | {o['ubicacion']} | {o['equipo_afectado']} ({o['nombre_estado']})"
+
+
 def flujo_registrar_orden(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar orden de trabajo")
     solicitudes = listar_solicitudes_disponibles()
     sol = elegir_de_lista(
-        "Solicitud de mantenimiento",
+        "Solicitud de mantenimiento (Pendiente)",
         solicitudes,
-        lambda s: f"{s['folio']} | {s['fecha_registro']} | {s['ubicacion']} ({s['nombre_estado']})",
+        lambda s: f"{s['folio']} | {s['fecha_registro']} | {s['ubicacion']} | {s['equipo_afectado']}",
     )
     if not sol:
         return
     mensaje(f"Ubicacion: {sol['ubicacion']}")
+    mensaje(f"Equipo afectado: {sol['equipo_afectado']}")
     mensaje(f"Problema reportado: {sol['descripcion_reporte']}")
 
-    # Mantenimiento clasifica la solicitud: categoria y prioridad si faltan, equipo opcional
+    # El supervisor clasifica la solicitud: categoria y prioridad de sus catalogos
     cats = listar_catalogos_solicitud()
-    nombre_categoria = None
-    if not sol["nombre_categoria"]:
-        categoria = elegir_de_lista(
-            "Categoria del problema",
-            cats["categorias"],
-            lambda c: f"{c['nombre_categoria']} ({c['descripcion_categoria']})",
-        )
-        if not categoria:
-            return
-        nombre_categoria = categoria["nombre_categoria"]
-    else:
-        mensaje(f"Categoria: {sol['nombre_categoria']}")
-
-    nombre_prioridad = None
-    if not sol["nombre_prioridad"]:
-        prioridad = elegir_de_lista(
-            "Prioridad",
-            cats["prioridades"],
-            lambda p: f"{p['nombre_prioridad']} ({p['descripcion_prioridad']})",
-        )
-        if not prioridad:
-            return
-        nombre_prioridad = prioridad["nombre_prioridad"]
-    else:
-        mensaje(f"Prioridad: {sol['nombre_prioridad']}")
-
-    codigo_inventario = None
-    if not sol["codigo_inventario"]:
-        ninguno = {"codigo_inventario": None}
-        equipo = elegir_de_lista(
-            "Equipo afectado (opcional)",
-            [ninguno] + cats["equipos"],
-            lambda e: "Ninguno" if e is ninguno
-            else f"{e['nombre_equipo']} ({e['piso']}, {e['area']}, {e['salon']})",
-        )
-        if not equipo:
-            return
-        codigo_inventario = equipo["codigo_inventario"]
-    else:
-        mensaje(f"Equipo afectado: {sol['nombre_equipo']}")
+    categoria = elegir_de_lista(
+        "Categoria del problema",
+        cats["categorias"],
+        lambda c: f"{c['nombre_categoria']} ({c['descripcion_categoria']})"
+        + (" (actual)" if c["nombre_categoria"] == sol["nombre_categoria"] else ""),
+    )
+    if not categoria:
+        return
+    prioridad = elegir_de_lista(
+        "Prioridad",
+        cats["prioridades"],
+        lambda p: f"{p['nombre_prioridad']} ({p['descripcion_prioridad']})"
+        + (" (actual)" if p["nombre_prioridad"] == sol["nombre_prioridad"] else ""),
+    )
+    if not prioridad:
+        return
 
     observaciones_reporte = None
     if not sol["observaciones"]:
-        while True:
-            observaciones_reporte = entrada("\nObservaciones del reporte (opcional)")
-            if len(observaciones_reporte) <= 250:
-                break
-            error(f"El texto no puede pasar de 250 caracteres (escribiste {len(observaciones_reporte)}).")
+        observaciones_reporte = pedir_texto_opcional("\nObservaciones del reporte (opcional)", 250)
     else:
         mensaje(f"Observaciones del reporte: {sol['observaciones']}")
 
@@ -771,42 +931,46 @@ def flujo_registrar_orden(sesion):
         obs or None,
         mano_obra,
         materiales,
-        nombre_categoria,
-        nombre_prioridad,
-        codigo_inventario,
-        observaciones_reporte or None,
+        categoria["nombre_categoria"],
+        prioridad["nombre_prioridad"],
+        observaciones_reporte,
     )
     exito(f"\nOrden de trabajo {clave} registrada correctamente.")
-    mensaje(f"La solicitud {sol['folio']} quedo clasificada con su categoria y prioridad.")
+    mensaje(f"La solicitud {sol['folio']} quedo clasificada con su categoria y prioridad y paso a En revision.")
 
 
 def flujo_asignar_tecnicos(sesion):
     limpiar_pantalla(sesion)
     titulo("Asignar tecnicos a una orden de trabajo")
     orden = elegir_de_lista(
-        "Orden de trabajo",
-        listar_ordenes(),
-        lambda o: f"{o['clave_mantenimiento']} | Solicitud {o['folio']} | {o['nombre_equipo']}",
+        "Orden de trabajo (Pendiente o En proceso)",
+        listar_ordenes(estados=("Pendiente", "En proceso")),
+        lambda o: formato_orden(o) + f" - {o['tecnicos']} tecnico(s)",
     )
     if not orden:
         return
 
-    tecnicos = listar_tecnicos()
+    tecnicos = listar_tecnicos(excluir_orden=orden["clave_mantenimiento"])
     asignaciones = []
     elegidos = set()
+    ya_asignados = orden["tecnicos"]
+    faltan = max(0, 2 - ya_asignados)
 
-    mensaje("\nSe requiere asignar al menos 2 tecnicos a la orden.")
+    if faltan:
+        mensaje(f"\nSe requiere que la orden tenga al menos 2 tecnicos (ahora tiene {ya_asignados}).")
+    else:
+        mensaje(f"\nLa orden ya tiene {ya_asignados} tecnicos; puedes agregar mas.")
     while True:
         disponibles = [t for t in tecnicos if t["numero_empleado"] not in elegidos]
         if not disponibles:
             break
         tecnico = elegir_de_lista(
-            f"Tecnico #{len(asignaciones) + 1}",
+            f"Tecnico #{ya_asignados + len(asignaciones) + 1}",
             disponibles,
             lambda t: f"{t['nombre_completo']} ({t['especialidad']})",
         )
         if not tecnico:
-            if len(asignaciones) < 2:
+            if len(asignaciones) < max(faltan, 1):
                 aviso("Asignacion cancelada.")
                 return
             break
@@ -823,21 +987,64 @@ def flujo_asignar_tecnicos(sesion):
         )
         elegidos.add(tecnico["numero_empleado"])
 
-        if len(asignaciones) >= 2 and not confirmar("Asignar otro tecnico adicional?", False):
+        if len(asignaciones) >= faltan and not confirmar("Asignar otro tecnico adicional?", False):
             break
 
+    if not asignaciones:
+        aviso("No hay tecnicos disponibles para asignar.")
+        return
     asignar_tecnicos_orden(orden["clave_mantenimiento"], asignaciones)
     exito(f"\n{len(asignaciones)} tecnicos asignados a {orden['clave_mantenimiento']}.")
+    mensaje("La orden y su solicitud quedaron En proceso.")
+
+
+def flujo_cancelar_orden(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Cancelar orden de trabajo")
+    mensaje("Solo se cancelan ordenes Pendiente o En proceso. La solicitud regresa a Pendiente.")
+    orden = elegir_de_lista(
+        "Orden a cancelar",
+        listar_ordenes(estados=("Pendiente", "En proceso")),
+        formato_orden,
+    )
+    if not orden:
+        return
+    if not confirmar(f"Confirmas cancelar la orden {orden['clave_mantenimiento']}? No se puede deshacer", False):
+        aviso("Operacion cancelada.")
+        return
+    folio = cancelar_orden(orden["clave_mantenimiento"])
+    exito(f"\nOrden {orden['clave_mantenimiento']} cancelada.")
+    mensaje(f"La solicitud {folio} regreso a Pendiente para crearle otra orden.")
+
+
+def mostrar_mis_ordenes(sesion):
+    limpiar_pantalla(sesion)
+    titulo("Mis ordenes asignadas")
+    filas = listar_mis_ordenes(sesion["numero"])
+    if not filas:
+        aviso("\nNo tienes ordenes de trabajo asignadas.")
+        return
+    mensaje(f"\nOrdenes donde estas asignado ({len(filas)} registros)")
+    imprimir_tabla(
+        ["Orden", "Folio", "Ubicacion", "Equipo afectado", "Estado", "Programada"],
+        [
+            [o["clave_mantenimiento"], o["folio"], o["ubicacion"], o["equipo_afectado"], o["nombre_estado"], o["fecha_programada"]]
+            for o in filas
+        ],
+        [13, 13, 32, 20, 11, 10],
+    )
 
 
 def flujo_registrar_actividades(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar actividades en una orden de trabajo")
-    orden = elegir_de_lista(
-        "Orden de trabajo",
-        listar_ordenes(),
-        lambda o: f"{o['clave_mantenimiento']} | {o['nombre_equipo']} ({o['nombre_estado']})",
+    # Solo ordenes En proceso con al menos 2 tecnicos; un tecnico ve solo las suyas
+    ordenes = listar_ordenes(
+        estados=("En proceso",),
+        numero_empleado=None if es_supervisor(sesion) else sesion["numero"],
+        min_tecnicos=2,
     )
+    orden = elegir_de_lista("Orden de trabajo (En proceso)", ordenes, formato_orden)
     if not orden:
         return
 
@@ -865,21 +1072,29 @@ def flujo_registrar_actividades(sesion):
         if len(actividades) >= 2 and not confirmar("Agregar otra actividad?", False):
             break
 
-    finalizar = confirmar("Marcar la orden de trabajo como Solucionado?", False)
-    registrar_actividades_orden(orden["clave_mantenimiento"], actividades, finalizar_orden=finalizar)
+    registrar_actividades_orden(
+        orden["clave_mantenimiento"], actividades, numero_empleado=sesion["numero"], es_supervisor=es_supervisor(sesion)
+    )
     exito(f"\n{len(actividades)} actividades registradas en {orden['clave_mantenimiento']}.")
 
 
 def flujo_registrar_plan(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar plan de mantenimiento preventivo")
-    edificio = elegir_de_lista("Edificio / instalacion", listar_edificios(), lambda e: e["nombre_edificio"])
-    if not edificio:
+    mensaje("El plan se registra para un equipo del edificio Docencia 1.")
+    piso = elegir_de_lista("Piso del equipo", list(PISOS), lambda p: p)
+    if not piso:
         return
-
+    area = elegir_de_lista(
+        f"Area de {piso}",
+        listar_areas_con_equipos(piso),
+        lambda a: f"{a['area']} ({a['equipos']} equipo(s))",
+    )
+    if not area:
+        return
     equipo = elegir_de_lista(
         "Equipo de trabajo",
-        listar_equipos_por_edificio(edificio["clave_edificio"]),
+        listar_equipos_por_piso_area(piso, area["area"]),
         lambda eq: f"{eq['nombre_equipo']} (Salon {eq['salon']})",
     )
     if not equipo:
@@ -889,15 +1104,16 @@ def flujo_registrar_plan(sesion):
     if not nombre:
         return
     descripcion = pedir_texto("Descripcion del plan")
-    frecuencia = elegir_de_lista(
-        "Frecuencia",
-        ["Semanal", "Mensual", "Trimestral", "Semestral", "Anual"],
-        lambda f: f,
-    )
+    otra = "Otra"
+    frecuencia = elegir_de_lista("Frecuencia", list(FRECUENCIAS) + [otra], lambda f: f)
     if not frecuencia:
         return
+    if frecuencia == otra:
+        frecuencia = pedir_texto_limitado("Escribe la frecuencia (ej. Cada 15 dias) (0 para cancelar)", MAX_FRECUENCIA)
+        if not frecuencia:
+            return
     duracion = pedir_decimal("Duracion estimada en horas", 2.0)
-    estado = elegir_de_lista("Estado del plan", ["Activo", "Inactivo"], lambda e: e)
+    estado = elegir_de_lista("Estado del plan", list(ESTADOS_PLAN), lambda e: e)
     if not estado:
         return
 
@@ -915,14 +1131,15 @@ def flujo_registrar_plan(sesion):
 def flujo_registrar_solucion(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar solucion y materiales utilizados")
+    # Solo reportes con su orden En proceso y sin solucion; un tecnico ve solo los de sus ordenes
     reporte = elegir_de_lista(
-        "Reporte sin solucion",
-        listar_reportes_sin_solucion(),
-        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['ubicacion']} ({r['nombre_estado']})",
+        "Reporte con orden En proceso",
+        listar_reportes_sin_solucion(sesion["numero"], es_supervisor(sesion)),
+        lambda r: f"{r['folio']} | {r['clave_mantenimiento']} | {r['ubicacion']} | {r['equipo_afectado']}",
     )
     if not reporte:
         return
-    mensaje(f"Equipo afectado: {reporte['nombre_equipo']}")
+    mensaje(f"Equipo afectado: {reporte['equipo_afectado']}")
     mensaje(f"Problema reportado: {reporte['descripcion_reporte']}")
 
     aplicada = pedir_texto("\nSolucion aplicada (0 para cancelar)", permitir_cancelar=True)
@@ -934,7 +1151,7 @@ def flujo_registrar_solucion(sesion):
     materiales = []
     usados = set()
     while confirmar("Registrar un material utilizado?", False):
-        disponibles = [m for m in listar_materiales() if m["codigo_material"] not in usados]
+        disponibles = [m for m in listar_materiales() if m["codigo_material"] not in usados and m["existencia"] > 0]
         material = elegir_de_lista(
             "Material",
             disponibles,
@@ -949,9 +1166,12 @@ def flujo_registrar_solucion(sesion):
         materiales.append({"codigo_material": material["codigo_material"], "cantidad": cantidad})
         usados.add(material["codigo_material"])
 
-    numero_solucion = registrar_solucion(reporte["folio"], tiempo, aplicada, obs or None, materiales)
+    numero_solucion = registrar_solucion(
+        reporte["folio"], tiempo, aplicada, obs or None, materiales,
+        numero_empleado=sesion["numero"], es_supervisor=es_supervisor(sesion),
+    )
     exito(f"\nSolucion {numero_solucion} registrada para {reporte['folio']} ({len(materiales)} materiales).")
-    exito("El reporte quedo en estado Solucionado.")
+    exito(f"La orden {reporte['clave_mantenimiento']} y el reporte quedaron en estado Solucionado.")
 
 
 def mostrar_consulta_soluciones(sesion):
@@ -972,7 +1192,7 @@ def mostrar_consulta_soluciones(sesion):
             f"Solucion {s['numero_solucion']}",
             [
                 ("No. solicitud", s["folio"]),
-                ("Equipo", s["nombre_equipo"]),
+                ("Equipo afectado", s["equipo_afectado"]),
                 ("Fecha de resolucion", s["fecha_resolucion"]),
                 ("Tiempo de resolucion", f"{float(s['tiempo_resolucion']):.2f} hrs"),
                 ("Solucion aplicada", s["solucion_aplicada"]),
@@ -990,15 +1210,10 @@ def mostrar_consulta_soluciones(sesion):
 def mostrar_consulta_seguimiento(sesion):
     limpiar_pantalla(sesion)
     titulo("Seguimiento de un reporte por folio")
-    elegido = elegir_de_lista(
-        "Reporte",
-        listar_folios(),
-        lambda r: f"{r['folio']} | {r['fecha_registro']} | {r['ubicacion']} ({r['nombre_estado']})",
-    )
-    if not elegido:
+    r = buscar_folio()
+    if not r:
         return
 
-    r = consultar_seguimiento_folio(elegido["folio"])
     imprimir_ficha(
         f"Reporte {r['folio']}",
         [
@@ -1006,7 +1221,7 @@ def mostrar_consulta_seguimiento(sesion):
             ("Fecha de registro", r["fecha_registro"]),
             ("Solicitante", r["nombre_usuario"]),
             ("Ubicacion", r["ubicacion"]),
-            ("Equipo afectado", r["nombre_equipo"]),
+            ("Equipo afectado", r["equipo_afectado"]),
             ("Categoria", r["nombre_categoria"]),
             ("Prioridad", r["nombre_prioridad"]),
             ("Estado", r["nombre_estado"]),
@@ -1217,22 +1432,26 @@ def flujo_eliminar_material(sesion):
 def flujo_material_tomado(sesion):
     limpiar_pantalla(sesion)
     titulo("Registrar material tomado")
+    # Un tecnico solo ve las soluciones de las ordenes donde esta asignado
     solucion = elegir_de_lista(
         "Solucion a la que se asigna el material",
-        listar_soluciones_registradas(),
-        lambda s: f"Solucion {s['numero_solucion']} | {s['folio']} | {s['nombre_equipo']}",
+        listar_soluciones_registradas(None if es_supervisor(sesion) else sesion["numero"]),
+        lambda s: f"Solucion {s['numero_solucion']} | {s['folio']} | {s['equipo_afectado']}",
     )
     if not solucion:
         return
     material = elegir_de_lista(
         "Material tomado",
-        listar_inventario(),
+        [m for m in listar_inventario() if m["existencia"] > 0],
         lambda m: f"{m['nombre_material']} (existencia: {m['existencia']})",
     )
     if not material:
         return
     cantidad = pedir_entero(f"Cantidad tomada de {material['nombre_material']} (disponibles: {material['existencia']})", 1)
-    mat = registrar_material_tomado(solucion["numero_solucion"], material["codigo_material"], cantidad)
+    mat = registrar_material_tomado(
+        solucion["numero_solucion"], material["codigo_material"], cantidad,
+        numero_empleado=sesion["numero"], es_supervisor=es_supervisor(sesion),
+    )
     exito(f"\nSe tomaron {cantidad} de {mat['nombre_material']}. Existencia restante: {mat['existencia']}.")
     if mat["existencia"] <= mat["stock_minimo"]:
         aviso(f"Aviso: la existencia esta en o por debajo del minimo ({mat['stock_minimo']}). Conviene reponer.")
@@ -1254,33 +1473,19 @@ def flujo_reabastecer_material(sesion):
 
 
 def menu_materiales(sesion):
-    while True:
-        limpiar_pantalla(sesion)
-        mostrar_menu(
-            "Gestion de materiales",
-            [
-                ("1", "Ver inventario"),
-                ("2", "Registrar material nuevo"),
-                ("3", "Registrar material tomado (descuenta solo la cantidad)"),
-                ("4", "Reabastecer material"),
-                ("5", "Eliminar material"),
-                ("0", "Regresar"),
-            ],
-        )
-        op = pedir_opcion(["0", "1", "2", "3", "4", "5"])
-        if op == "0":
-            break
-        if op == "1":
-            ejecutar_opcion(mostrar_inventario, sesion)
-        elif op == "2":
-            ejecutar_opcion(flujo_registrar_material, sesion)
-        elif op == "3":
-            ejecutar_opcion(flujo_material_tomado, sesion)
-        elif op == "4":
-            ejecutar_opcion(flujo_reabastecer_material, sesion)
-        elif op == "5":
-            ejecutar_opcion(flujo_eliminar_material, sesion)
-        pausar()
+    # El tecnico solo ve el inventario y registra material tomado
+    ejecutar_menu(
+        sesion,
+        "Gestion de materiales",
+        [
+            ("Ver inventario", mostrar_inventario, False, False),
+            ("Registrar material nuevo", flujo_registrar_material, False, True),
+            ("Registrar material tomado (descuenta solo la cantidad)", flujo_material_tomado, False, False),
+            ("Reabastecer material", flujo_reabastecer_material, False, True),
+            ("Eliminar material", flujo_eliminar_material, False, True),
+        ],
+        "Regresar",
+    )
 
 
 def mostrar_tecnicos(sesion):
@@ -1401,6 +1606,10 @@ def pedir_ubicacion_equipo(piso_actual=None, area_actual=None, salon_actual=None
     )
     if not area:
         return None
+    if area == AREA_OTRA:
+        area = pedir_texto_limitado("Escribe el area (0 para cancelar)", MAX_AREA)
+        if not area:
+            return None
     while True:
         etiqueta = "Salon o lugar (ej. 104, LAB-REDES, CUB-3)"
         salon = entrada(etiqueta, salon_actual) if salon_actual else pedir_texto(etiqueta)
@@ -1442,8 +1651,9 @@ def flujo_registrar_equipo(sesion):
     if not ubicacion:
         return
     piso, area, salon = ubicacion
+    reparar = confirmar("Necesita reparacion", False)
 
-    registrado = registrar_equipo(codigo, nombre, tipo, piso, area, salon)
+    registrado = registrar_equipo(codigo, nombre, tipo, piso, area, salon, reparar)
     exito(f"\nEquipo {registrado} registrado en Docencia 1, {piso}, {area}, {salon}.")
 
 
@@ -1470,7 +1680,9 @@ def flujo_editar_equipo(sesion):
                 break
             error(f"El salon o lugar no puede pasar de {MAX_SALON} caracteres.")
 
-    editar_equipo(equipo["codigo_inventario"], nombre, tipo, piso, area, salon)
+    reparar = confirmar("Necesita reparacion", bool(equipo["necesita_reparacion"]))
+
+    editar_equipo(equipo["codigo_inventario"], nombre, tipo, piso, area, salon, reparar)
     exito(f"\nEquipo {equipo['codigo_inventario']} actualizado: {nombre} (Docencia 1, {piso}, {area}, {salon}).")
 
 
@@ -1480,19 +1692,15 @@ def flujo_eliminar_equipo(sesion):
     equipo = elegir_de_lista(
         "Equipo a eliminar",
         listar_equipos(),
-        lambda e: formato_equipo(e)
-        + (f" - {e['reportes']} reporte(s), {e['planes']} plan(es)" if e["reportes"] or e["planes"] else ""),
+        lambda e: formato_equipo(e) + (f" - {e['planes']} plan(es)" if e["planes"] else ""),
     )
     if not equipo:
         return
     # Se valida antes de pedir confirmacion; eliminar_equipo vuelve a revisarlo como respaldo
-    folios, planes = usos_equipo(equipo["codigo_inventario"])
-    if folios or planes:
+    planes = usos_equipo(equipo["codigo_inventario"])
+    if planes:
         aviso(f"\nAviso: {equipo['nombre_equipo']} no puede eliminarse para no perder el historial.")
-        if folios:
-            aviso(f"Aparece en los reportes: {', '.join(folios)}.", "    ")
-        if planes:
-            aviso(f"Aparece en los planes: {', '.join(planes)}.", "    ")
+        aviso(f"Aparece en los planes: {', '.join(planes)}.", "    ")
         return
     mensaje(f"\nSe eliminara el equipo {equipo['nombre_equipo']} ({equipo['codigo_inventario']}).")
     if not confirmar("Confirmas la eliminacion? No se puede deshacer", False):
@@ -1716,17 +1924,23 @@ def menu_solicitante(sesion):
             "Menu solicitante",
             [
                 ("1", "Registrar solicitud de mantenimiento"),
-                ("2", "Consultar mis solicitudes por fecha"),
+                ("2", "Mis solicitudes"),
+                ("3", "Seguimiento de mi solicitud"),
+                ("4", "Cancelar mi solicitud"),
                 ("0", "Cerrar sesion"),
             ],
         )
-        op = pedir_opcion(["0", "1", "2"])
+        op = pedir_opcion(["0", "1", "2", "3", "4"])
         if op == "0":
             break
         if op == "1":
             ejecutar_opcion(flujo_registrar_solicitud, sesion)
         elif op == "2":
-            ejecutar_opcion(mostrar_consulta_solicitudes, sesion, True)
+            ejecutar_opcion(mostrar_mis_solicitudes, sesion)
+        elif op == "3":
+            ejecutar_opcion(mostrar_seguimiento_mi_solicitud, sesion)
+        elif op == "4":
+            ejecutar_opcion(flujo_cancelar_solicitud, sesion)
         pausar()
 
 
@@ -1776,76 +1990,59 @@ def menu_consultas(sesion):
 
 
 def menu_mantenimiento(sesion):
-    while True:
-        limpiar_pantalla(sesion)
-        opciones = [
-            ("1", "Registrar orden de trabajo de una solicitud"),
-            ("2", "Asignar tecnicos a una orden de trabajo (minimo 2)"),
-            ("3", "Registrar actividades en una orden (minimo 2)"),
-            ("4", "Registrar solucion y materiales de un reporte"),
-            ("5", "Registrar plan de mantenimiento preventivo"),
-            ("6", "Gestion de materiales (inventario, altas, bajas)"),
-            ("7", "Consultas del sistema"),
-            ("8", "Gestion de personal (registro y baja de tecnicos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
-            ("9", "Gestion de equipos (altas, cambios y bajas)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
-            ("10", "Gestion de catalogos (categorias y tipos)" + ("" if sesion.get("es_supervisor") else " - solo supervisores")),
-            ("0", "Cerrar sesion"),
-        ]
-        mostrar_menu("Menu mantenimiento", opciones)
-        op = pedir_opcion([str(n) for n in range(11)])
-        if op == "0":
-            break
-        if op == "6":
-            menu_materiales(sesion)
-            continue
-        if op == "7":
-            menu_consultas(sesion)
-            continue
-        if op == "8":
-            menu_personal(sesion)
-            if not sesion.get("es_supervisor"):
-                pausar()
-            continue
-        if op == "9":
-            menu_equipos(sesion)
-            if not sesion.get("es_supervisor"):
-                pausar()
-            continue
-        if op == "10":
-            menu_catalogos(sesion)
-            if not sesion.get("es_supervisor"):
-                pausar()
-            continue
-        if op == "1":
-            ejecutar_opcion(flujo_registrar_orden, sesion)
-        elif op == "2":
-            ejecutar_opcion(flujo_asignar_tecnicos, sesion)
-        elif op == "3":
-            ejecutar_opcion(flujo_registrar_actividades, sesion)
-        elif op == "4":
-            ejecutar_opcion(flujo_registrar_solucion, sesion)
-        elif op == "5":
-            ejecutar_opcion(flujo_registrar_plan, sesion)
-        pausar()
+    # (texto, funcion, es_submenu, solo_supervisor). El tecnico no ve las opciones de supervisor.
+    materiales = (
+        "Gestion de materiales (inventario, altas, bajas)" if es_supervisor(sesion)
+        else "Gestion de materiales (inventario y material tomado)"
+    )
+    ejecutar_menu(
+        sesion,
+        "Menu supervisor" if es_supervisor(sesion) else "Menu tecnico",
+        [
+            ("Registrar orden de trabajo de una solicitud", flujo_registrar_orden, False, True),
+            ("Asignar tecnicos a una orden de trabajo (minimo 2)", flujo_asignar_tecnicos, False, True),
+            ("Cancelar orden de trabajo", flujo_cancelar_orden, False, True),
+            ("Mis ordenes asignadas", mostrar_mis_ordenes, False, False),
+            ("Registrar actividades en una orden (minimo 2)", flujo_registrar_actividades, False, False),
+            ("Registrar solucion y materiales de un reporte", flujo_registrar_solucion, False, False),
+            ("Registrar plan de mantenimiento preventivo", flujo_registrar_plan, False, True),
+            (materiales, menu_materiales, True, False),
+            ("Consultas del sistema", menu_consultas, True, False),
+            ("Gestion de personal (registro y baja de tecnicos)", menu_personal, True, True),
+            ("Gestion de equipos (altas, cambios y bajas)", menu_equipos, True, True),
+            ("Gestion de catalogos (categorias y tipos)", menu_catalogos, True, True),
+        ],
+        "Cerrar sesion",
+    )
+
+
+MAX_INTENTOS_LOGIN = 3
 
 
 def flujo_login():
     limpiar_pantalla()
     titulo("Iniciar sesion")
     mensaje("Ingresa con tu correo institucional (Solicitante) o usuario de tecnico (Mantenimiento).")
-    mensaje("Ejemplo solicitante: mauro.sanchez@ut-tijuana.edu.mx / 1234")
-    mensaje("Ejemplo mantenimiento: carlos.ramirez / 1234")
     linea("-")
-    identificador = Prompt.ask(_etiqueta("Correo o usuario (0 para cancelar)"), console=console, default="", show_default=False).strip()
-    if identificador == "0" or not identificador:
-        return None
-    contrasena = Prompt.ask("Contrasena", console=console, password=True).strip()
-    sesion = iniciar_sesion(identificador, contrasena)
-    if not sesion:
+    fallidos = 0
+    while fallidos < MAX_INTENTOS_LOGIN:
+        identificador = Prompt.ask(
+            _etiqueta("Correo o usuario (0 para cancelar)"), console=console, default="", show_default=False
+        ).strip()
+        if identificador == "0" or not identificador:
+            return None
+        contrasena = Prompt.ask("Contrasena", console=console, password=True).strip()
+        sesion = iniciar_sesion(identificador, contrasena)
+        if sesion:
+            return sesion
+        fallidos += 1
+        restantes = MAX_INTENTOS_LOGIN - fallidos
         error("Credenciales incorrectas. Verifica tu usuario/correo y contrasena.")
-        pausar()
-        return None
-    return sesion
+        if restantes:
+            mensaje(f"Te quedan {restantes} intento(s).\n")
+    aviso(f"\nSe alcanzaron {MAX_INTENTOS_LOGIN} intentos fallidos seguidos. Regresas al menu de acceso.")
+    pausar()
+    return None
 
 
 def main():

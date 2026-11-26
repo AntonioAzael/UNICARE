@@ -1,4 +1,12 @@
 from conexion import conectar
+from funciones.solicitudes import SQL_EQUIPO_AFECTADO
+
+# Solucion de una orden donde el tecnico esta asignado (la orden vigente del reporte, no cancelada)
+SQL_SOLUCION_DEL_TECNICO = """
+    EXISTS (SELECT 1 FROM mantenimiento m
+            INNER JOIN mantenimiento_trabajador mt ON mt.clave_mantenimiento = m.clave_mantenimiento
+            WHERE m.folio = s.folio AND m.nombre_estado <> 'Cancelado' AND mt.numero_empleado = %s)
+"""
 
 
 def listar_inventario():
@@ -20,20 +28,22 @@ def listar_inventario():
         cnx.close()
 
 
-def listar_soluciones_registradas():
+def listar_soluciones_registradas(numero_empleado=None):
+    # Soluciones a las que se puede asignar material; con numero_empleado (tecnico) solo las de sus ordenes
     cnx = conectar()
     try:
         cursor = cnx.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT s.numero_solucion, s.folio, COALESCE(e.nombre_equipo, 'Sin equipo') AS nombre_equipo,
-                   s.fecha_resolucion
+        sql = f"""
+            SELECT s.numero_solucion, s.folio, {SQL_EQUIPO_AFECTADO} AS equipo_afectado, s.fecha_resolucion
             FROM solucion s
             INNER JOIN reporte r ON r.folio = s.folio
-            LEFT JOIN equipo_instalacion e ON e.codigo_inventario = r.codigo_inventario
-            ORDER BY s.numero_solucion DESC
-            """
-        )
+        """
+        params = []
+        if numero_empleado is not None:
+            sql += " WHERE " + SQL_SOLUCION_DEL_TECNICO
+            params.append(numero_empleado)
+        sql += " ORDER BY s.numero_solucion DESC"
+        cursor.execute(sql, tuple(params))
         filas = cursor.fetchall()
         cursor.close()
         return filas
@@ -137,14 +147,25 @@ def reabastecer_material(codigo_material, cantidad):
         cnx.close()
 
 
-def registrar_material_tomado(numero_solucion, codigo_material, cantidad):
-    # Salida de material: descuenta SOLO la cantidad tomada y la registra en la solucion
+def registrar_material_tomado(numero_solucion, codigo_material, cantidad, numero_empleado=None, es_supervisor=False):
+    # Salida de material: descuenta SOLO la cantidad tomada y la registra en la solucion.
+    # Un tecnico solo puede hacerlo en soluciones de ordenes donde esta asignado.
     if cantidad <= 0:
         raise ValueError("La cantidad tomada debe ser mayor a cero.")
     cnx = conectar()
     try:
         cnx.start_transaction()
         cursor = cnx.cursor(dictionary=True)
+        cursor.execute("SELECT 1 FROM solucion s WHERE s.numero_solucion = %s", (numero_solucion,))
+        if not cursor.fetchone():
+            raise ValueError("La solucion ya no existe.")
+        if not es_supervisor:
+            cursor.execute(
+                "SELECT 1 FROM solucion s WHERE s.numero_solucion = %s AND " + SQL_SOLUCION_DEL_TECNICO,
+                (numero_solucion, numero_empleado),
+            )
+            if not cursor.fetchone():
+                raise ValueError("Solo puedes registrar material en soluciones de ordenes donde estas asignado.")
 
         # El WHERE evita que la existencia quede negativa
         cursor.execute(
