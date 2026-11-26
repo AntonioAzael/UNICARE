@@ -31,8 +31,8 @@ MAX_DESCRIPCION = 250
 
 # Ubicacion completa de un reporte: "<edificio>, <piso>, <area>, <lugar>"
 SQL_UBICACION = "CONCAT_WS(', ', ed.nombre_edificio, r.piso, r.area, r.lugar)"
-# Equipo afectado escrito por el solicitante; "No indicado" si lo dejo vacio
-SQL_EQUIPO_AFECTADO = "COALESCE(NULLIF(r.equipo_afectado, ''), 'No indicado')"
+# Equipo o elemento afectado escrito por el solicitante (obligatorio)
+SQL_EQUIPO_AFECTADO = "r.equipo_afectado"
 
 
 def normalizar_folio(folio):
@@ -230,8 +230,10 @@ def registrar_solicitud(numero_cuenta, piso, area, lugar, descripcion_reporte, e
             raise ValueError("Escribe el nombre del area.")
         if len(area) > MAX_AREA:
             raise ValueError(f"El area no puede pasar de {MAX_AREA} caracteres.")
-    equipo = (equipo_afectado or "").strip() or None
-    if equipo and len(equipo) > MAX_EQUIPO_AFECTADO:
+    equipo = (equipo_afectado or "").strip()
+    if not equipo:
+        raise ValueError("Escribe el equipo o elemento afectado.")
+    if len(equipo) > MAX_EQUIPO_AFECTADO:
         raise ValueError(f"El equipo afectado no puede pasar de {MAX_EQUIPO_AFECTADO} caracteres.")
     if area == AREA_RACK:
         lugar = AREA_RACK

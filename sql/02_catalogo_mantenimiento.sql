@@ -68,7 +68,7 @@ INSERT INTO equipo_instalacion (codigo_inventario, nombre_equipo, tipo_equipo_in
 ('EQ-D1-PC01', 'PC Laboratorio de Redes 01', 'Equipo de Computo', 1, 'Laboratorios', 'Planta alta', 'LAB-REDES', 'ED-DOC1'),
 ('EQ-D1-AA01', 'Minisplit Cubiculo 3', 'Climatizacion', 0, 'Oficinas/Cubiculos', 'Planta alta', 'CUB-3', 'ED-DOC1');
 
--- Reportes de muestra (equipo_afectado es lo que escribio el solicitante; NULL si no lo indico):
+-- Reportes de muestra (equipo_afectado es el equipo o elemento que escribio el solicitante; siempre se indica):
 --   Consulta 1: REP-0001, 0002, 0003 y 0008 registrados en la misma fecha (CURDATE)
 --   Consulta 8: 3 Pendiente (sin clasificar), 1 En revision, 2 En proceso, 3 Solucionado y 1 Cancelado
 --   Consulta 10: reportes en los dos pisos y en 6 areas (REP-0010 usa un area escrita por el estudiante)
@@ -82,9 +82,9 @@ INSERT INTO reporte (folio, descripcion_reporte, observaciones, fecha_registro, 
 ('REP-2026-0005', 'El minisplit del cubiculo enfria poco y huele a humedad', 'Se solicito limpieza y revision de gas', DATE_SUB(CURDATE(), INTERVAL 13 DAY), 'Planta alta', 'Oficinas/Cubiculos', 'Cubiculo 3', 4, 'ED-DOC1', 'Solucionado', 'Limpieza', 'Media', 'Minisplit'),
 ('REP-2026-0006', 'Un lavabo gotea sin parar y el agua llega al piso', 'Cerrar la llave de paso mientras se repara', DATE_SUB(CURDATE(), INTERVAL 6 DAY), 'Planta baja', 'Banos', 'Bano de mujeres', 1, 'ED-DOC1', 'Solucionado', 'Infraestructura', 'Media', 'Lavabo de en medio'),
 ('REP-2026-0007', 'El switch del rack hace mucho ruido y se siente muy caliente', 'Revisar tambien la ventilacion del cuarto del rack', DATE_SUB(CURDATE(), INTERVAL 2 DAY), 'Planta baja', 'Rack de servidores', 'Rack de servidores', 3, 'ED-DOC1', 'En proceso', 'Internet', 'Alta', 'Switch del rack'),
-('REP-2026-0008', 'El inodoro del fondo no deja de correr agua', NULL, CURDATE(), 'Planta baja', 'Banos', 'Bano de hombres', 2, 'ED-DOC1', 'Pendiente', NULL, NULL, NULL),
+('REP-2026-0008', 'El inodoro del fondo no deja de correr agua', NULL, CURDATE(), 'Planta baja', 'Banos', 'Bano de hombres', 2, 'ED-DOC1', 'Pendiente', NULL, NULL, 'Inodoro del fondo'),
 ('REP-2026-0009', 'Dos contactos de la mesa 4 no tienen corriente', NULL, DATE_SUB(CURDATE(), INTERVAL 1 DAY), 'Planta alta', 'Laboratorios', 'Laboratorio de Electronica', 1, 'ED-DOC1', 'Pendiente', NULL, NULL, 'Contactos de la mesa 4'),
-('REP-2026-0010', 'Una lampara del pasillo no prende', NULL, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Planta baja', 'Pasillo principal', 'Frente a la escalera', 2, 'ED-DOC1', 'Cancelado', NULL, NULL, NULL);
+('REP-2026-0010', 'Una lampara del pasillo no prende', NULL, DATE_SUB(CURDATE(), INTERVAL 3 DAY), 'Planta baja', 'Pasillo principal', 'Frente a la escalera', 2, 'ED-DOC1', 'Cancelado', NULL, NULL, 'Lampara del pasillo');
 
 -- Mantenimientos u ordenes de trabajo de muestra (Consulta 3)
 INSERT INTO mantenimiento (clave_mantenimiento, fecha_creacion, fecha_programada, fecha_inicio, fecha_fin, descripcion_trabajo, observaciones, costo_mano_obra, costo_materiales, codigo_tipo, folio, nombre_estado) VALUES

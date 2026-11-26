@@ -73,14 +73,19 @@ def esquema_actualizado():
             return False
         cursor.execute(
             """
-            SELECT COLUMN_NAME FROM information_schema.COLUMNS
+            SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'reporte'
             """,
             (DB_CONFIG["database"],),
         )
-        columnas = {fila[0] for fila in cursor.fetchall()}
+        columnas = {fila[0]: fila[1] for fila in cursor.fetchall()}
         cursor.close()
-        return {"piso", "equipo_afectado"}.issubset(columnas) and "codigo_inventario" not in columnas
+        # El equipo afectado es obligatorio: si la columna todavia acepta nulos, es el esquema anterior
+        return (
+            {"piso", "equipo_afectado"}.issubset(columnas)
+            and "codigo_inventario" not in columnas
+            and columnas["equipo_afectado"] == "NO"
+        )
     finally:
         cnx.close()
 

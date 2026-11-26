@@ -539,10 +539,13 @@ def flujo_registrar_solicitud(sesion):
         if not lugar:
             return
 
-    equipo_afectado = pedir_texto_opcional(
-        "\nEquipo afectado (opcional, ej. Proyector, Contacto de la mesa 4; Enter para omitir)",
+    # Obligatorio en todas las areas, tambien en Rack de servidores
+    equipo_afectado = pedir_texto_limitado(
+        "\nEquipo o elemento afectado (ej. Proyector, Puerta, Switch principal; 0 para cancelar)",
         MAX_EQUIPO_AFECTADO,
     )
+    if not equipo_afectado:
+        return
 
     descripcion = pedir_texto_limitado(
         "\nDescribe el problema con tus propias palabras (0 para cancelar)", MAX_DESCRIPCION
@@ -553,7 +556,7 @@ def flujo_registrar_solicitud(sesion):
     folio = registrar_solicitud(sesion["numero"], piso, area, lugar, descripcion, equipo_afectado)
     exito(f"\nSolicitud registrada con numero {folio}.")
     mensaje(f"Ubicacion: Docencia 1, {piso}, {area}, {lugar}.")
-    mensaje(f"Equipo afectado: {equipo_afectado or 'No indicado'}.")
+    mensaje(f"Equipo afectado: {equipo_afectado}.")
     mensaje("Mantenimiento asignara la categoria y la prioridad al crear la orden de trabajo.")
 
 

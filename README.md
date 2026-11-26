@@ -32,7 +32,7 @@ Los diagramas estan en la carpeta `docs/` (`UniCare_DER_MR_14_entidades.drawio`)
 - Entidades: `usuario`, `categoria`, `prioridad`, `estado`, `edificio`, `equipo_instalacion`, `tipo_mantenimiento`, `material`, `trabajador_mantenimiento`, `reporte`, `solucion`, `mantenimiento`, `historial_mantenimiento`, `plan_mantenimiento`.
 - Relaciones M:M: `mantenimiento_trabajador` (PARTICIPA EN) y `solucion_material` (UTILIZA).
 - Una **orden de trabajo** es un registro de `mantenimiento` y sus **actividades** se guardan en `historial_mantenimiento`.
-- La ubicacion de un reporte se guarda en el propio `reporte` (`clave_edificio`, `piso`, `area` y `lugar`) y se muestra como "Docencia 1, piso, area, lugar". El **equipo afectado** (`equipo_afectado`) es texto que escribe el solicitante; el reporte ya no se liga con `equipo_instalacion`. La categoria y la prioridad quedan vacias hasta que el supervisor crea la orden de trabajo.
+- La ubicacion de un reporte se guarda en el propio `reporte` (`clave_edificio`, `piso`, `area` y `lugar`) y se muestra como "Docencia 1, piso, area, lugar". El **equipo o elemento afectado** (`equipo_afectado`, obligatorio) es texto que escribe el solicitante; el reporte ya no se liga con `equipo_instalacion`. La categoria y la prioridad quedan vacias hasta que el supervisor crea la orden de trabajo.
 
 ## Roles y permisos
 
@@ -99,7 +99,7 @@ El sistema atiende solo el edificio **Docencia 1**. Todo lo escribe o elige el s
    - Planta alta: Salones, Oficinas/Cubiculos, Laboratorios y Otra area.
    - Con "Otra area" escribe el nombre del area (maximo 30 caracteres) y se guarda lo que escribio.
 3. **Lugar**: lo escribe (maximo 60 caracteres, ej. "Salon 104"), salvo en Banos (Bano de hombres o Bano de mujeres) y en Rack de servidores (se registra solo).
-4. **Equipo afectado** (opcional, maximo 80 caracteres): "Equipo afectado (opcional, ej. Proyector, Contacto de la mesa 4; Enter para omitir)". Si lo deja vacio se muestra "No indicado".
+4. **Equipo o elemento afectado** (obligatorio en todas las areas, tambien en Rack de servidores; maximo 80 caracteres): "Equipo o elemento afectado (ej. Proyector, Puerta, Switch principal; 0 para cancelar)".
 5. **Descripcion** del problema con sus propias palabras.
 
 La solicitud se guarda en estado *Pendiente* y el sistema muestra el folio generado. No se le pregunta categoria, prioridad ni equipo de inventario.
